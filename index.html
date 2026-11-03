@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CreatorHub - ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER</title>
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Material Symbols Outlined -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#032839",
+            "primary-container": "#1e3e50",
+            "sidebar-bg": "#1e3e50",
+            "sidebar-active": "#eaf2f7",
+            background: "#eaf2f7",
+            canvas: "#eaf2f7",
+            secondary: "#2c6673",
+            "secondary-container": "#b0e9f8",
+            coral: "#b34927",
+            "coral-bg": "#fdede7",
+            tertiary: "#4d0d00",
+            "on-surface": "#0c1d27",
+            "on-surface-variant": "#42474c"
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            body: ['"Plus Jakarta Sans"', 'sans-serif']
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Chart.js for Dashboards & Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- SheetJS for Full Excel .xlsx Generation -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Supabase Client for Realtime PostgreSQL Database & Multi-User Sync -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Custom CSS (Oceanic Inventory Design System) -->
+  <link rel="stylesheet" href="css/custom.css">
+</head>
+<body class="bg-[#dce9f2] font-sans text-[#0c1d27] antialiased selection:bg-[#b0e9f8] selection:text-[#032839] p-0 md:p-3 min-h-screen flex flex-col items-center justify-center">
+
+  <!-- ======================================================================= -->
+  <!-- DASHBOARD LOGIN SCREEN (Matching Reference Illustration & Card)           -->
+  <!-- ======================================================================= -->
+  <div id="login-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-[#edf2f7] overflow-y-auto p-4 sm:p-6 transition-all duration-300">
+    <div class="w-full max-w-5xl flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-14 my-auto">
+      
+      <!-- Left: Flat 2D Vector Workspace Artwork (Desk, Chair, Lamp, Clock, Calendar) -->
+      <div class="hidden md:flex flex-1 items-center justify-center relative w-full max-w-[500px] h-[400px]">
+        <svg class="w-full h-full drop-shadow-sm select-none" viewBox="0 0 520 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Floor Line -->
+          <line x1="30" y1="365" x2="490" y2="365" stroke="#cbdfe9" stroke-width="3.5" stroke-linecap="round"/>
+
+          <!-- Wall Calendar (Top Left) -->
+          <rect x="55" y="70" width="76" height="18" rx="3" fill="#3b82f6"/>
+          <rect x="55" y="88" width="76" height="54" rx="2" fill="#ffffff" stroke="#cbdfe9" stroke-width="1.5"/>
+          <!-- Calendar Grid Lines -->
+          <line x1="55" y1="102" x2="131" y2="102" stroke="#e2edf3" stroke-width="1"/>
+          <line x1="55" y1="116" x2="131" y2="116" stroke="#e2edf3" stroke-width="1"/>
+          <line x1="55" y1="130" x2="131" y2="130" stroke="#e2edf3" stroke-width="1"/>
+          <line x1="74" y1="88" x2="74" y2="142" stroke="#e2edf3" stroke-width="1"/>
+          <line x1="93" y1="88" x2="93" y2="142" stroke="#e2edf3" stroke-width="1"/>
+          <line x1="112" y1="88" x2="112" y2="142" stroke="#e2edf3" stroke-width="1"/>
+          <!-- Marked Day 'X' -->
+          <path d="M 70 119 L 78 127 M 78 119 L 70 127" stroke="#1e3e50" stroke-width="2.5" stroke-linecap="round"/>
+
+          <!-- Wall Clock (Top Right) -->
+          <circle cx="340" cy="75" r="32" fill="#ffffff" stroke="#3b82f6" stroke-width="4.5"/>
+          <circle cx="340" cy="75" r="3" fill="#1e3e50"/>
+          <!-- Hour Hand & Minute Hand (pointing at 10:10) -->
+          <line x1="340" y1="75" x2="340" y2="54" stroke="#1e3e50" stroke-width="3" stroke-linecap="round"/>
+          <line x1="340" y1="75" x2="356" y2="83" stroke="#1e3e50" stroke-width="3" stroke-linecap="round"/>
+
+          <!-- Work Desk Tabletop -->
+          <rect x="60" y="250" width="390" height="15" rx="3" fill="#1e3e50"/>
+
+          <!-- Left Trestle Legs (A-frame) -->
+          <polygon points="90,265 76,365 88,365 104,265" fill="#3b82f6"/>
+          <polygon points="126,265 142,365 130,365 110,265" fill="#3b82f6"/>
+          <rect x="82" y="328" width="56" height="7" rx="1.5" fill="#3b82f6"/>
+
+          <!-- Right Trestle Legs (A-frame) -->
+          <polygon points="360,265 346,365 358,365 374,265" fill="#3b82f6"/>
+          <polygon points="396,265 412,365 400,365 380,265" fill="#3b82f6"/>
+          <rect x="352" y="328" width="56" height="7" rx="1.5" fill="#3b82f6"/>
+
+          <!-- Desk Lamp Base & Angled Arm -->
+          <ellipse cx="365" cy="249" rx="16" ry="4" fill="#1e3e50"/>
+          <line x1="365" y1="249" x2="330" y2="175" stroke="#1e3e50" stroke-width="4.5" stroke-linecap="round"/>
+          <line x1="330" y1="175" x2="300" y2="155" stroke="#1e3e50" stroke-width="4.5" stroke-linecap="round"/>
+          <!-- Conical Lamp Shade -->
+          <polygon points="290,142 315,150 299,174 277,164" fill="#2563eb"/>
+          <!-- Translucent Light Cone Beam -->
+          <polygon points="277,164 299,174 340,250 195,250" fill="#ffffff" opacity="0.4"/>
+
+          <!-- Computer Monitor on Desk -->
+          <rect x="230" y="238" width="38" height="12" rx="2" fill="#d2e2ec"/>
+          <rect x="170" y="148" width="158" height="98" rx="8" fill="#1e3e50"/>
+          <rect x="176" y="154" width="146" height="86" rx="5" fill="#f0f6fa"/>
+          <!-- Screen graphic elements -->
+          <rect x="184" y="162" width="48" height="46" rx="3" fill="#a4cbdd"/>
+          <polygon points="188,204 200,188 214,204" fill="#2c6673"/>
+          <polygon points="210,204 222,194 230,204" fill="#426d83"/>
+          <rect x="242" y="164" width="70" height="7" rx="2" fill="#cbdfe9"/>
+          <rect x="242" y="176" width="58" height="7" rx="2" fill="#cbdfe9"/>
+          <rect x="242" y="188" width="45" height="7" rx="2" fill="#cbdfe9"/>
+          <rect x="288" y="224" width="16" height="16" rx="2" fill="#ffffff" stroke="#cbdfe9"/>
+
+          <!-- Coffee Cup on Desk -->
+          <path d="M 100 225 L 102 250 L 120 250 L 122 225 Z" fill="#ffffff" stroke="#cbdfe9" stroke-width="1.5"/>
+          <path d="M 121 229 C 128 229, 128 243, 121 243" fill="none" stroke="#cbdfe9" stroke-width="2"/>
+
+          <!-- Ergonomic Office Chair in Royal Blue (Center Foreground) -->
+          <path d="M 148 200 C 148 172, 214 172, 214 200 L 208 280 C 208 285, 154 285, 154 280 Z" fill="#2563eb"/>
+          <rect x="144" y="278" width="74" height="15" rx="5" fill="#1d4ed8"/>
+          <rect x="171" y="293" width="20" height="8" rx="2" fill="#1e3e50"/>
+          <rect x="178" y="301" width="6.5" height="30" fill="#1e3e50"/>
+          <line x1="181" y1="331" x2="142" y2="358" stroke="#1e3e50" stroke-width="5" stroke-linecap="round"/>
+          <line x1="181" y1="331" x2="220" y2="358" stroke="#1e3e50" stroke-width="5" stroke-linecap="round"/>
+          <line x1="181" y1="331" x2="181" y2="361" stroke="#1e3e50" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="141" cy="360" r="4" fill="#1e3e50"/>
+          <circle cx="221" cy="360" r="4" fill="#1e3e50"/>
+          <circle cx="181" cy="363" r="4" fill="#1e3e50"/>
+        </svg>
+      </div>
+
+      <!-- Right: Sleek White Floating Login Card (Matching User Image) -->
+      <div class="w-full max-w-[420px] bg-white rounded-[32px] p-6 sm:p-9 border border-[#d2e2ec] shadow-[0_20px_50px_rgba(20,50,70,0.12)]">
+        
+        <!-- Header: Two Users Silhouette + Dashboard Login -->
+        <div class="flex items-center gap-2.5 pb-4 border-b border-slate-100">
+          <div class="w-9 h-9 rounded-xl bg-[#eaf4fa] flex items-center justify-center text-[#2563eb]">
+            <span class="material-symbols-outlined text-[22px]">group</span>
+          </div>
+          <span class="text-base font-bold text-[#1e3e50]">Dashboard Login</span>
+        </div>
+
+        <!-- Dynamic Error Notice (e.g. Wrong Password!!) -->
+        <div id="login-error-msg" class="text-rose-600 font-bold text-xs text-center mt-4 min-h-[18px] transition-all"></div>
+
+        <!-- Headline & Subtitle -->
+        <div class="text-center my-4">
+          <h2 class="text-2xl font-black text-[#143242] tracking-wider uppercase">WELCOME BACK</h2>
+          <p class="text-xs text-[#5c7786] mt-1 font-medium">Give your best report today!</p>
+        </div>
+
+        <!-- Login Form -->
+        <form id="dashboard-login-form" class="space-y-4">
+          <!-- Username Field -->
+          <div>
+            <div class="flex items-center gap-3 border-b-2 border-slate-200 focus-within:border-[#2563eb] py-2 transition-all">
+              <span class="material-symbols-outlined text-[#2563eb] text-[20px]">person</span>
+              <input type="text" id="login-username" placeholder="Username" autocomplete="username" class="w-full bg-transparent text-xs sm:text-sm text-[#143242] placeholder-[#8ea4b2] outline-none font-medium">
+            </div>
+            <div id="login-username-err" class="text-[11px] text-rose-500 font-semibold mt-1 hidden">* username field cannot be empty</div>
+          </div>
+
+          <!-- Password Field -->
+          <div>
+            <div class="flex items-center gap-3 border-b-2 border-slate-200 focus-within:border-[#2563eb] py-2 transition-all relative">
+              <span class="material-symbols-outlined text-[#2563eb] text-[20px]">lock</span>
+              <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" class="w-full bg-transparent text-xs sm:text-sm text-[#143242] placeholder-[#8ea4b2] outline-none font-medium pr-8">
+              <button type="button" id="btn-toggle-login-pass" class="absolute right-1 text-slate-400 hover:text-slate-600 transition" title="Lihat Password">
+                <span class="material-symbols-outlined text-[18px]">visibility</span>
+              </button>
+            </div>
+            <div id="login-password-err" class="text-[11px] text-rose-500 font-semibold mt-1 hidden">* password field cannot be empty</div>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="pt-3">
+            <button type="submit" id="btn-submit-login" class="w-full py-3.5 px-6 rounded-full bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 group">
+              <span class="material-symbols-outlined text-[19px] group-hover:translate-x-0.5 transition-transform">login</span>
+              <span>Login to My Account</span>
+            </button>
+          </div>
+        </form>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- MASTER APP CANVAS FRAME (Oceanic Inventory Design System)               -->
+  <!-- ======================================================================= -->
+  <div id="app-shell" class="hidden w-full max-w-[1560px] min-h-[calc(100vh-1.5rem)] bg-[#eaf2f7] rounded-3xl overflow-hidden shadow-2xl border border-[#cbdfe9]/70 flex flex-col lg:flex-row">
+
+    <!-- ===================================================================== -->
+    <!-- 1. LEFT DEEP SLATE-TEAL SIDEBAR (#1e3e50)                             -->
+    <!-- ===================================================================== -->
+    <aside class="hidden lg:flex flex-col w-64 bg-[#1e3e50] text-[#a5c3d4] justify-between shrink-0 select-none border-r border-[#152e3d]">
+      <div class="flex flex-col">
+        
+        <!-- User Profile Header Cell (Matching Reference Image 1 & 2) -->
+        <div class="pt-7 pb-5 px-5 flex flex-col items-center text-center border-b border-[#294d62]/50 cursor-pointer hover:bg-white/5 transition" onclick="window.location.hash='#settings'; if(window.setActiveSettingsTab) window.setActiveSettingsTab('profile');" title="Klik untuk edit profil Anda">
+          <div class="relative mb-2.5">
+            <img id="sidebar-user-avatar" alt="Rian Pratama" class="w-16 h-16 rounded-full object-cover ring-2 ring-[#457088] shadow-md" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150">
+            <span class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[#38b2ac] border-2 border-[#1e3e50]"></span>
+          </div>
+          <h3 id="sidebar-user-name" class="font-bold text-white text-[15px] tracking-tight leading-snug">Rian Pratama</h3>
+          <p id="sidebar-user-email" class="text-[11px] text-[#7ea1b5] mt-0.5">rian.lead@creatorhub.id</p>
+          <span id="sidebar-user-role" class="mt-2 text-[10px] font-semibold uppercase tracking-wider text-[#98cfe2] bg-white/10 px-2.5 py-0.5 rounded-full">
+            Owner
+          </span>
+        </div>
+
+        <!-- Drive Storage Widget (Matching Reference Image 1) -->
+        <div class="px-4 py-3.5">
+          <div class="p-3 rounded-xl bg-[#173241]/80 border border-[#2b5168] flex flex-col gap-1.5 shadow-2xs">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-[#92b5c9] flex items-center gap-1.5 font-medium">
+                <span class="material-symbols-outlined text-[15px] text-[#38b2ac]">cloud_done</span>
+                <span>Drive Storage</span>
+              </span>
+              <span class="text-white font-semibold">42.5%</span>
+            </div>
+            <div class="w-full h-1.5 bg-[#25495e] rounded-full overflow-hidden">
+              <div class="h-full bg-[#38b2ac] rounded-full w-[42.5%] transition-all duration-500"></div>
+            </div>
+            <span class="text-[10px] text-[#7196ac]">42.5 GB / 100 GB terpakai</span>
+          </div>
+        </div>
+
+        <!-- Navigation Links (Oceanic System with Connected Active Pill) -->
+        <nav class="flex-1 px-3 space-y-1 text-xs">
+          <a href="#dashboard" data-nav="dashboard" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">space_dashboard</span>
+            <span>Dashboard</span>
+          </a>
+          <a href="#content" data-nav="content" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">lightbulb</span>
+            <span>Ide &amp; Pipeline</span>
+          </a>
+          <a href="#calendar" data-nav="calendar" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">calendar_month</span>
+            <span>Kalender Konten</span>
+          </a>
+          <a href="#tasks" data-nav="tasks" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold bg-[#eaf2f7] text-[#1e3e50] shadow-sm transition-all">
+            <span class="material-symbols-outlined text-[19px]">view_kanban</span>
+            <span>Tugas &amp; Kanban</span>
+          </a>
+          <a href="#production" data-nav="production" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">edit_note</span>
+            <span>Script &amp; Naskah</span>
+          </a>
+          <a href="#media" data-nav="media" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">folder_shared</span>
+            <span>Media Drive Sync</span>
+          </a>
+          <a href="#reports" data-nav="reports" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">table_chart</span>
+            <span>Database Sheets</span>
+          </a>
+          <a href="#business" data-nav="business" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">business_center</span>
+            <span>Bisnis &amp; Brand</span>
+          </a>
+          <a href="#finance" data-nav="finance" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">payments</span>
+            <span>Kas &amp; Invoice</span>
+          </a>
+          <a href="#timetracking" data-nav="timetracking" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">timer</span>
+            <span>Stopwatch &amp; Rutin</span>
+          </a>
+          <a href="#targets" data-nav="targets" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">insights</span>
+            <span>Sasaran KPI</span>
+          </a>
+          <a href="#notifications" data-nav="notifications" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">notifications</span>
+            <span>Notifikasi</span>
+          </a>
+          <a href="#settings" data-nav="settings" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-[#9dc0d4] hover:bg-[#274d63] hover:text-white transition-all">
+            <span class="material-symbols-outlined text-[19px]">settings</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- Bottom Sidebar Section (Apps Script Sync status & Logout) -->
+      <div class="p-4 border-t border-[#294d62]/50 flex flex-col gap-2">
+        <button id="sidebar-sync-indicator" onclick="window.triggerCloudSync()" class="w-full flex items-center justify-between text-[11px] px-3 py-2 rounded-xl bg-[#173241]/60 hover:bg-[#173241] border border-[#2b5168] transition-all text-left">
+          <span class="flex items-center gap-1.5 text-[#7ca0b5]">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#38b2ac] opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-[#38b2ac]"></span>
+            </span>
+            <span>Apps Script v2.4</span>
+          </span>
+          <span class="font-semibold text-white">Connected</span>
+        </button>
+
+        <button id="btn-sidebar-logout" onclick="window.handleAppLogout()" class="flex items-center gap-2 px-3 py-1.5 text-[12px] text-[#93b7cc] hover:text-white transition-colors w-full text-left">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
+          <span>Ganti Akun / Logout</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ===================================================================== -->
+    <!-- 2. MAIN CONTENT STAGE & TOP BAR                                       -->
+    <!-- ===================================================================== -->
+    <div class="flex-1 flex flex-col min-w-0 bg-[#eaf2f7] overflow-hidden">
+      
+      <!-- Top Bar (Matching Image 1 & 2: Welcome + Search pill + Toggles + Bell + +Buat Baru) -->
+      <header class="h-20 px-4 sm:px-8 flex items-center justify-between border-b border-[#d8e6ef]/80 bg-[#eaf2f7]/85 backdrop-blur-sm sticky top-0 z-30 shrink-0">
+        <!-- Left: Hamburger (Mobile) & Greeting Title -->
+        <div class="flex items-center gap-3">
+          <button id="btn-open-mobile-drawer" class="lg:hidden p-2 rounded-xl bg-white border border-[#cde0ec] text-[#1e3e50] shadow-sm hover:bg-slate-50 transition" aria-label="Buka Menu">
+            <span class="material-symbols-outlined text-[20px]">menu</span>
+          </button>
+
+          <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-[#143242] tracking-tight flex items-center gap-1.5">
+              <span id="header-greeting-user">Welcome Rian !</span>
+            </h1>
+            <p class="text-[11px] sm:text-xs text-[#5f8296] mt-0.5 font-medium">Creator Hub • Content &amp; Production Workflow</p>
+          </div>
+        </div>
+
+        <!-- Right Controls: Capsule Search Pill, Sun/Moon Pill, Bell, Quick Action -->
+        <div class="flex items-center gap-3 sm:gap-4">
+          <!-- Global Search Pill -->
+          <div class="relative hidden sm:block w-52 md:w-72">
+            <input id="global-search-input-header" type="text" placeholder="Search tasks, client, or ID..." class="w-full pl-9 pr-9 py-2 bg-white/95 border border-[#cde0ec] rounded-full text-xs text-[#1e3e50] placeholder-[#799cb0] focus:outline-none focus:ring-2 focus:ring-[#2c6673] shadow-sm transition-all">
+            <span class="material-symbols-outlined absolute left-3 top-2.5 text-[17px] text-[#799cb0]">search</span>
+            <button id="global-search-trigger" class="material-symbols-outlined absolute right-3 top-2.5 text-[16px] text-[#9bb8c9] hover:text-[#1e3e50] transition-colors" title="Pencarian Cepat">tune</button>
+          </div>
+
+          <!-- Day/Night Switch Mock Pill -->
+          <div id="theme-toggle-btn" class="hidden sm:flex items-center bg-white border border-[#cde0ec] rounded-full p-1 shadow-sm cursor-pointer hover:border-[#2c6673] transition-all" title="Toggle Tema">
+            <div class="w-6 h-6 rounded-full bg-[#1e3e50] text-white flex items-center justify-center shadow-xs">
+              <span class="material-symbols-outlined text-[13px]">wb_sunny</span>
+            </div>
+            <div class="w-6 h-6 rounded-full text-[#799cb0] flex items-center justify-center">
+              <span class="material-symbols-outlined text-[13px]">dark_mode</span>
+            </div>
+          </div>
+
+          <!-- Sync Status Badge Pill (Live Responsive) -->
+          <div id="cloud-sync-status-badge"></div>
+
+          <!-- Notification Bell with Red Indicator Dot -->
+          <a href="#notifications" class="relative w-9 h-9 rounded-full bg-white border border-[#cde0ec] text-[#2c6673] flex items-center justify-center hover:bg-[#dff0ff] transition-colors shadow-sm" title="Notifikasi Aktivitas">
+            <span class="material-symbols-outlined text-[20px]">notifications</span>
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#e53e3e] ring-2 ring-white"></span>
+          </a>
+
+          <!-- Quick Action "+ Buat Baru" Button with Dropdown -->
+          <div class="relative">
+            <button id="btn-quick-add-dropdown" class="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-full bg-[#1e3e50] text-white hover:bg-[#2c6673] font-semibold text-xs shadow-md transition-all">
+              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span class="hidden sm:inline">+ Buat Baru</span>
+            </button>
+
+            <!-- Quick Add Dropdown Menu -->
+            <div id="quick-add-menu" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-[#cde0ec] py-2 z-50 text-xs">
+              <button data-quick-action="content" class="w-full text-left px-4 py-2.5 hover:bg-[#eaf2f7] flex items-center gap-2.5 font-semibold text-[#1e3e50] transition">
+                <span class="material-symbols-outlined text-[18px] text-[#2c6673]">lightbulb</span>
+                <span>Buat Ide / Rencana Konten</span>
+              </button>
+              <button data-quick-action="task" class="w-full text-left px-4 py-2.5 hover:bg-[#eaf2f7] flex items-center gap-2.5 font-semibold text-[#1e3e50] transition">
+                <span class="material-symbols-outlined text-[18px] text-[#2c6673]">check_circle</span>
+                <span>Tambah Tugas Pekerjaan</span>
+              </button>
+              <button data-quick-action="script" class="w-full text-left px-4 py-2.5 hover:bg-[#eaf2f7] flex items-center gap-2.5 font-semibold text-[#1e3e50] transition">
+                <span class="material-symbols-outlined text-[18px] text-[#2c6673]">edit_note</span>
+                <span>Tulis Naskah Hook 3s</span>
+              </button>
+              <button data-quick-action="finance" class="w-full text-left px-4 py-2.5 hover:bg-[#eaf2f7] flex items-center gap-2.5 font-semibold text-[#1e3e50] transition">
+                <span class="material-symbols-outlined text-[18px] text-[#2c6673]">payments</span>
+                <span>Catat Arus Kas / Invoice</span>
+              </button>
+              <button data-quick-action="timer" class="w-full text-left px-4 py-2.5 hover:bg-[#eaf2f7] flex items-center gap-2.5 font-semibold text-[#1e3e50] transition">
+                <span class="material-symbols-outlined text-[18px] text-[#2c6673]">timer</span>
+                <span>Buka Live Stopwatch</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Scrollable Workspace -->
+      <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        <div id="main-view-container" class="space-y-6">
+          <!-- Rendered View Modules Mount Here -->
+        </div>
+      </main>
+
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- 3. MOBILE BOTTOM NAVIGATION (Visible below 1024px)                     -->
+  <!-- ======================================================================= -->
+  <nav id="bottom-nav" class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#cadbe6] px-3 py-2 flex items-center justify-around shadow-lg">
+    <a href="#dashboard" data-bottom-nav="dashboard" class="flex flex-col items-center text-[10px] font-medium text-[#799cb0] hover:text-[#1e3e50]">
+      <span class="material-symbols-outlined text-[20px]">space_dashboard</span>
+      <span>Dashboard</span>
+    </a>
+    <a href="#content" data-bottom-nav="content" class="flex flex-col items-center text-[10px] font-medium text-[#799cb0] hover:text-[#1e3e50]">
+      <span class="material-symbols-outlined text-[20px]">lightbulb</span>
+      <span>Ide</span>
+    </a>
+    <a href="#tasks" data-bottom-nav="tasks" class="flex flex-col items-center text-[10px] font-bold text-[#1e3e50]">
+      <span class="material-symbols-outlined text-[20px]">view_kanban</span>
+      <span>Tugas</span>
+    </a>
+    <a href="#calendar" data-bottom-nav="calendar" class="flex flex-col items-center text-[10px] font-medium text-[#799cb0] hover:text-[#1e3e50]">
+      <span class="material-symbols-outlined text-[20px]">calendar_month</span>
+      <span>Kalender</span>
+    </a>
+    <button onclick="document.getElementById('mobile-drawer').classList.remove('hidden')" class="flex flex-col items-center text-[10px] font-medium text-[#799cb0] hover:text-[#1e3e50]">
+      <span class="material-symbols-outlined text-[20px]">menu</span>
+      <span>Menu</span>
+    </button>
+  </nav>
+
+  <!-- ======================================================================= -->
+  <!-- 4. MOBILE SLIDE-OVER DRAWER (FULL OCEANIC MENU)                         -->
+  <!-- ======================================================================= -->
+  <div id="mobile-drawer" class="fixed inset-0 z-50 flex hidden">
+    <div class="fixed inset-0 bg-[#0c1d27]/60 backdrop-blur-xs" id="btn-close-mobile-drawer"></div>
+    <div class="relative w-72 max-w-[85%] bg-[#1e3e50] text-[#a5c3d4] h-full p-5 overflow-y-auto shadow-2xl flex flex-col justify-between">
+      <div class="space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-[#294d62]">
+          <div class="flex items-center gap-2 text-white font-bold text-sm">
+            <span class="material-symbols-outlined text-[20px] text-[#38b2ac]">movie</span>
+            <span>CREATOR HUB</span>
+          </div>
+          <button class="p-1 rounded-lg text-slate-400 hover:text-white" onclick="document.getElementById('mobile-drawer').classList.add('hidden')">
+            <span class="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        <nav class="space-y-1 text-xs font-medium">
+          <a href="#dashboard" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">space_dashboard</span>
+            <span>Dashboard</span>
+          </a>
+          <a href="#content" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">lightbulb</span>
+            <span>Ide &amp; Pipeline</span>
+          </a>
+          <a href="#calendar" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">calendar_month</span>
+            <span>Kalender Konten</span>
+          </a>
+          <a href="#tasks" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">view_kanban</span>
+            <span>Tugas &amp; Kanban</span>
+          </a>
+          <a href="#production" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">edit_note</span>
+            <span>Script &amp; Naskah</span>
+          </a>
+          <a href="#media" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">folder_shared</span>
+            <span>Media Drive Sync</span>
+          </a>
+          <a href="#reports" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">table_chart</span>
+            <span>Database Sheets</span>
+          </a>
+          <a href="#business" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">business_center</span>
+            <span>Bisnis &amp; Brand</span>
+          </a>
+          <a href="#finance" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">payments</span>
+            <span>Kas &amp; Invoice</span>
+          </a>
+          <a href="#timetracking" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">timer</span>
+            <span>Stopwatch &amp; Rutin</span>
+          </a>
+          <a href="#targets" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">insights</span>
+            <span>Sasaran KPI</span>
+          </a>
+          <a href="#notifications" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">notifications</span>
+            <span>Notifikasi</span>
+          </a>
+          <a href="#settings" class="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-[#274d63] hover:text-white">
+            <span class="material-symbols-outlined text-[18px]">settings</span>
+            <span>Settings</span>
+          </a>
+        </nav>
+      </div>
+
+      <div class="pt-4 border-t border-[#294d62] text-[11px] text-[#7ea1b5]">
+        CreatorHub OS v1.0
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- 5. GLOBAL SEARCH MODAL (CTRL+K)                                         -->
+  <!-- ======================================================================= -->
+  <div id="global-search-modal" class="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 modal-backdrop hidden">
+    <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-[#cde0ec] overflow-hidden">
+      <div class="p-4 border-b border-[#eaf2f7] flex items-center gap-3">
+        <span class="material-symbols-outlined text-[20px] text-[#799cb0]">search</span>
+        <input type="text" id="global-search-input" placeholder="Cari judul konten, tugas, naskah hook, brand..." class="flex-1 text-sm outline-none text-[#143242]">
+        <button id="global-search-close" class="text-xs text-[#799cb0] hover:text-[#1e3e50] font-bold px-2 py-1 rounded bg-[#eaf2f7]">ESC</button>
+      </div>
+      <div id="global-search-results" class="max-h-80 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- 6. GLOBAL DYNAMIC MODAL CONTAINER                                       -->
+  <!-- ======================================================================= -->
+  <div id="global-modal-container"></div>
+
+  <!-- ======================================================================= -->
+  <!-- 7. GLOBAL TOAST NOTIFICATION CONTAINER                                  -->
+  <!-- ======================================================================= -->
+  <div id="global-toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Main Application Script (Standalone Bundle - Works seamlessly via file:/// and http://) -->
+  <script src="js/bundle.js"></script>
+</body>
+</html>

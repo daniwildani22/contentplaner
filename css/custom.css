@@ -1,0 +1,104 @@
+/* Oceanic Inventory Design System - Custom CSS Styles */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+:root {
+  --color-canvas: #eaf2f7;
+  --color-canvas-dark: #122834;
+  --color-sidebar: #1e3e50;
+  --color-sidebar-dark: #142c38;
+  --color-primary: #1e3e50;
+  --color-secondary: #2c6673;
+  --color-coral: #b34927;
+  --color-coral-bg: #fdede7;
+  --color-border: #cbdfe9;
+  --color-border-card: #d2e2ec;
+  --color-text-main: #143242;
+  --color-text-muted: #5c7786;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Material Symbols optical alignment */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.material-symbols-fill {
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Slim Oceanic Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbdfe9;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9abfd2;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Modal Backdrops & Glassmorphism */
+.modal-backdrop {
+  background-color: rgba(14, 34, 46, 0.65);
+  backdrop-filter: blur(5px);
+}
+
+/* Kanban Board Column */
+.kanban-col {
+  min-width: 270px;
+  max-width: 320px;
+}
+
+/* Hide horizontal scrollbar while keeping scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Print Styling for PDF Exports */
+@media print {
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    padding: 0 !important;
+  }
+  aside, nav, header, #bottom-nav, #fab-quick-add, .no-print {
+    display: none !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  .card, .shadow-sm, .shadow-md {
+    box-shadow: none !important;
+    border: 1px solid #CBD5E1 !important;
+  }
+}
