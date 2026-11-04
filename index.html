@@ -642,10 +642,10 @@
             <div class="flex items-center gap-2.5">
               <img id="manage-user-avatar-preview" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" alt="Avatar" class="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-300 shrink-0 shadow-2xs">
               <div class="flex-1 flex items-center gap-2">
+                <input type="file" id="manage-user-upload-file" accept="image/*" style="position: fixed; top: -1000px; left: -1000px; opacity: 0; width: 1px; height: 1px;">
                 <label for="manage-user-upload-file" class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#e3f4f8] hover:bg-[#d0ebf3] text-[#1b6274] font-bold text-xs cursor-pointer transition shrink-0 border border-[#b6dce7]">
                   <span class="material-symbols-outlined text-[16px]">add_a_photo</span>
                   <span>Upload Foto</span>
-                  <input type="file" id="manage-user-upload-file" accept="image/*" class="hidden">
                 </label>
                 <input type="text" id="manage-user-avatar" placeholder="URL Foto atau otomatis dari upload..." class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] text-xs font-mono">
               </div>
@@ -758,6 +758,6 @@
   <div id="global-toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
   <!-- Main Application Script (Standalone Bundle - Works seamlessly via file:/// and http://) -->
-  <script src="js/bundle.js"></script>
+  <script src="js/bundle.js?v=2.7"></script>
 </body>
 </html>

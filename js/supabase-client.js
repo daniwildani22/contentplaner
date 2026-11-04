@@ -556,6 +556,23 @@ class SupabaseManager {
                   alert("⛔ Akses Ditutup: Status akun Anda telah dinonaktifkan oleh Owner.");
                   return;
                 }
+
+                // Sinkronkan update foto profil & nama secara realtime jika diubah dari perangkat lain
+                let profileChanged = false;
+                if (payload.new.avatar && payload.new.avatar !== currentUser.avatar) {
+                  currentUser.avatar = payload.new.avatar;
+                  profileChanged = true;
+                }
+                if (payload.new.name && payload.new.name !== currentUser.name) {
+                  currentUser.name = payload.new.name;
+                  profileChanged = true;
+                }
+                if (profileChanged) {
+                  auth.persist();
+                  if (typeof window !== "undefined" && window.app && typeof window.app.updateSidebarUserProfile === "function") {
+                    window.app.updateSidebarUserProfile();
+                  }
+                }
               }
             }
           }

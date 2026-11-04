@@ -612,9 +612,15 @@ class Store {
     if (!this.state[sheetName]) this.state[sheetName] = [];
     const list = this.state[sheetName];
     const target = String(id);
-    const index = list.findIndex(i => this.getPrimaryId(i, sheetName) === target);
+    let index = list.findIndex(i => this.getPrimaryId(i, sheetName) === target);
+    if (index === -1 && sheetName === SHEET_NAMES.USERS) {
+      index = list.findIndex(i => 
+        (i.user_id && String(i.user_id).toLowerCase() === target.toLowerCase()) ||
+        (i.username && String(i.username).toLowerCase() === target.toLowerCase())
+      );
+    }
 
-    // Upsert for SETTINGS sheet so configuration keys never get lost
+    // Upsert for SETTINGS and USERS sheet so configuration keys and users never get lost
     if (index === -1) {
       if (sheetName === SHEET_NAMES.SETTINGS) {
         const newItem = {
@@ -636,6 +642,22 @@ class Store {
         }
 
         return newItem;
+      } else if (sheetName === SHEET_NAMES.USERS) {
+        const newUser = {
+          user_id: id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          ...updates
+        };
+        list.push(newUser);
+        this.enqueueSync({ action: "update", sheet: sheetName, id, item: newUser });
+        this.notify({ type: "UPDATE", sheet: sheetName, id, item: newUser });
+
+        if (window.supabaseClient && window.supabaseClient.isConfigured()) {
+          window.supabaseClient.autoSave(sheetName, "update", newUser, id);
+        }
+
+        return newUser;
       }
       return null;
     }

@@ -1,7 +1,7 @@
 ﻿/**
  * ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER - COMPLETE APPLICATION BUNDLE
  * Standalone Zero-Dependency Build (Works directly via file:/// and http://)
- * Generated: 2026-11-04 14:42:23
+ * Generated: 2026-11-04 15:02:40
  */
 (function(window, document) {
 'use strict';
@@ -775,6 +775,23 @@ class SupabaseManager {
                   alert("⛔ Akses Ditutup: Status akun Anda telah dinonaktifkan oleh Owner.");
                   return;
                 }
+
+                // Sinkronkan update foto profil & nama secara realtime jika diubah dari perangkat lain
+                let profileChanged = false;
+                if (payload.new.avatar && payload.new.avatar !== currentUser.avatar) {
+                  currentUser.avatar = payload.new.avatar;
+                  profileChanged = true;
+                }
+                if (payload.new.name && payload.new.name !== currentUser.name) {
+                  currentUser.name = payload.new.name;
+                  profileChanged = true;
+                }
+                if (profileChanged) {
+                  auth.persist();
+                  if (typeof window !== "undefined" && window.app && typeof window.app.updateSidebarUserProfile === "function") {
+                    window.app.updateSidebarUserProfile();
+                  }
+                }
               }
             }
           }
@@ -1442,9 +1459,15 @@ class Store {
     if (!this.state[sheetName]) this.state[sheetName] = [];
     const list = this.state[sheetName];
     const target = String(id);
-    const index = list.findIndex(i => this.getPrimaryId(i, sheetName) === target);
+    let index = list.findIndex(i => this.getPrimaryId(i, sheetName) === target);
+    if (index === -1 && sheetName === SHEET_NAMES.USERS) {
+      index = list.findIndex(i => 
+        (i.user_id && String(i.user_id).toLowerCase() === target.toLowerCase()) ||
+        (i.username && String(i.username).toLowerCase() === target.toLowerCase())
+      );
+    }
 
-    // Upsert for SETTINGS sheet so configuration keys never get lost
+    // Upsert for SETTINGS and USERS sheet so configuration keys and users never get lost
     if (index === -1) {
       if (sheetName === SHEET_NAMES.SETTINGS) {
         const newItem = {
@@ -1466,6 +1489,22 @@ class Store {
         }
 
         return newItem;
+      } else if (sheetName === SHEET_NAMES.USERS) {
+        const newUser = {
+          user_id: id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          ...updates
+        };
+        list.push(newUser);
+        this.enqueueSync({ action: "update", sheet: sheetName, id, item: newUser });
+        this.notify({ type: "UPDATE", sheet: sheetName, id, item: newUser });
+
+        if (window.supabaseClient && window.supabaseClient.isConfigured()) {
+          window.supabaseClient.autoSave(sheetName, "update", newUser, id);
+        }
+
+        return newUser;
       }
       return null;
     }
@@ -9459,41 +9498,121 @@ let editingUserId = null; // null for add new user, userId string for editing
  */
 function compressAndCropAvatar(file, targetSize = 256, quality = 0.82) {
   return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith("image/")) {
+    if (!file) {
+      return reject(new Error("Tidak ada file yang dipilih."));
+    }
+
+    // Periksa apakah file adalah gambar (termasuk jika file.type kosong di beberapa browser ponsel)
+    const isImage = (file.type && file.type.toLowerCase().startsWith("image/")) ||
+                    (file.name && file.name.match(/\.(jpe?g|png|webp|gif|bmp|heic|heif|svg|avif)$/i)) ||
+                    (!file.type && file.size > 0);
+
+    if (!isImage) {
       return reject(new Error("File yang dipilih bukan merupakan format gambar yang didukung."));
     }
 
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Gagal membaca file gambar dari perangkat."));
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("File gambar rusak atau tidak dapat diproses."));
-      img.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          canvas.width = targetSize;
-          canvas.height = targetSize;
-          const ctx = canvas.getContext("2d");
+    // Gunakan URL.createObjectURL untuk performa instan dan hemat RAM di smartphone
+    let blobUrl = null;
+    try {
+      if (typeof window !== "undefined" && window.URL && typeof window.URL.createObjectURL === "function") {
+        blobUrl = window.URL.createObjectURL(file);
+      }
+    } catch (e) {
+      blobUrl = null;
+    }
 
-          const sw = img.naturalWidth || img.width;
-          const sh = img.naturalHeight || img.height;
-          const minDim = Math.min(sw, sh);
-          const sx = (sw - minDim) / 2;
-          const sy = (sh - minDim) / 2;
-
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = "high";
-          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
-
-          const dataUrl = canvas.toDataURL("image/jpeg", quality);
-          resolve(dataUrl);
-        } catch (err) {
-          reject(err);
-        }
-      };
-      img.src = e.target.result;
+    const cleanup = () => {
+      if (blobUrl && typeof window !== "undefined" && window.URL && typeof window.URL.revokeObjectURL === "function") {
+        try { window.URL.revokeObjectURL(blobUrl); } catch (e) {}
+      }
     };
-    reader.readAsDataURL(file);
+
+    const processImageElement = (img, rawFallback = null) => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        const ctx = canvas.getContext("2d");
+
+        const sw = img.naturalWidth || img.width;
+        const sh = img.naturalHeight || img.height;
+        if (!sw || !sh) {
+          cleanup();
+          if (rawFallback) return resolve(rawFallback);
+          return reject(new Error("Dimensi gambar tidak valid."));
+        }
+
+        const minDim = Math.min(sw, sh);
+        const sx = (sw - minDim) / 2;
+        const sy = (sh - minDim) / 2;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
+
+        let dataUrl = "";
+        try {
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        } catch (canvErr) {
+          dataUrl = canvas.toDataURL(); // Fallback png
+        }
+
+        cleanup();
+
+        if (dataUrl && dataUrl.length > 50) {
+          resolve(dataUrl);
+        } else if (rawFallback) {
+          resolve(rawFallback);
+        } else {
+          reject(new Error("Gagal mengompresi foto profil."));
+        }
+      } catch (err) {
+        cleanup();
+        if (rawFallback) return resolve(rawFallback);
+        reject(new Error("Gagal memproses gambar pada kanvas browser."));
+      }
+    };
+
+    if (blobUrl) {
+      const img = new Image();
+      img.onload = () => processImageElement(img);
+      img.onerror = () => {
+        cleanup();
+        // Fallback jika blob URL gagal (e.g. format khusus), coba FileReader
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Gagal membaca file gambar dari perangkat."));
+        reader.onload = (e) => {
+          const rawResult = e.target.result;
+          const imgFallback = new Image();
+          imgFallback.onload = () => processImageElement(imgFallback, rawResult);
+          imgFallback.onerror = () => {
+            if (rawResult && rawResult.startsWith("data:") && file.size < 2000000) {
+              return resolve(rawResult);
+            }
+            reject(new Error("Format foto tidak didukung oleh browser. Gunakan foto JPG atau PNG."));
+          };
+          imgFallback.src = rawResult;
+        };
+        reader.readAsDataURL(file);
+      };
+      img.src = blobUrl;
+    } else {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Gagal membaca file gambar dari perangkat."));
+      reader.onload = (e) => {
+        const rawResult = e.target.result;
+        const img = new Image();
+        img.onload = () => processImageElement(img, rawResult);
+        img.onerror = () => {
+          if (rawResult && rawResult.startsWith("data:") && file.size < 2000000) {
+            return resolve(rawResult);
+          }
+          reject(new Error("Format gambar tidak didukung atau rusak. Gunakan foto JPG atau PNG."));
+        };
+        img.src = rawResult;
+      };
+      reader.readAsDataURL(file);
+    }
   });
 }
 if (typeof window !== "undefined") {
@@ -9767,10 +9886,13 @@ function renderProfileTab(currentUser, users) {
       <!-- ================================================================= -->
       <!-- SECTION 1: EDIT PROFIL SAYA (User Dapat Mengganti Profilnya)       -->
       <!-- ================================================================= -->
+      <!-- Standalone File Input (Accessible and avoids nested label double-click cancellation) -->
+      <input type="file" id="prof-upload-file" accept="image/*" style="position: fixed; top: -1000px; left: -1000px; opacity: 0; width: 1px; height: 1px;">
+
       <div class="bg-white p-6 sm:p-7 rounded-3xl border border-[#d2e2ec] shadow-sm space-y-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
           <div class="flex items-center gap-4">
-            <div class="relative group cursor-pointer" onclick="document.getElementById('prof-upload-file')?.click()" title="Klik untuk upload foto profil dari perangkat">
+            <label for="prof-upload-file" id="preview-avatar-container" class="relative group cursor-pointer block shrink-0" title="Klik untuk upload foto profil dari perangkat (Galeri HP / Komputer)">
               <img id="preview-avatar-img" src="${currentUser.avatar || presetAvatars[0]}" alt="${currentUser.name}" class="w-20 h-20 rounded-2xl object-cover ring-2 ring-[#1e3e50] shadow-md transition-all group-hover:brightness-90">
               <div class="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
                 <span class="material-symbols-outlined text-[22px]">photo_camera</span>
@@ -9779,7 +9901,7 @@ function renderProfileTab(currentUser, users) {
               <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#38b2ac] border-2 border-white flex items-center justify-center text-white" title="Status Online">
                 <span class="w-2 h-2 rounded-full bg-white"></span>
               </span>
-            </div>
+            </label>
             <div>
               <h3 class="font-extrabold text-lg text-[#143242] leading-tight">${currentUser.name}</h3>
               <div class="flex items-center gap-2 mt-1">
@@ -9794,10 +9916,9 @@ function renderProfileTab(currentUser, users) {
           </div>
 
           <div class="flex flex-col sm:items-end gap-1.5">
-            <label for="prof-upload-file" class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#e3f4f8] hover:bg-[#d0ebf3] text-[#1b6274] font-bold text-xs cursor-pointer transition shadow-2xs border border-[#b6dce7]">
+            <label for="prof-upload-file" id="btn-upload-profile-photo" class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#e3f4f8] hover:bg-[#d0ebf3] text-[#1b6274] font-bold text-xs cursor-pointer transition shadow-2xs border border-[#b6dce7]">
               <span class="material-symbols-outlined text-[19px]">add_a_photo</span>
               <span>Upload Foto dari Perangkat Ini</span>
-              <input type="file" id="prof-upload-file" accept="image/*" class="hidden">
             </label>
             <span class="text-[10.5px] text-slate-400">Pilih dari Galeri HP / Kamera / Komputer</span>
           </div>
@@ -9808,7 +9929,7 @@ function renderProfileTab(currentUser, users) {
           <!-- Status Banner jika gambar baru dipilih -->
           <div id="prof-upload-status" class="hidden p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-medium">
             <span class="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
-            <span>Foto profil berhasil dipilih dan dioptimalkan! Klik tombol <strong>Simpan Perubahan Profil</strong> di bawah untuk menerapkan.</span>
+            <span>Foto profil berhasil diupload dan disimpan ke akun Anda!</span>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -9847,7 +9968,7 @@ function renderProfileTab(currentUser, users) {
               ${presetAvatars.map(av => `
                 <img src="${av}" alt="Preset" class="btn-select-preset-avatar w-10 h-10 rounded-xl object-cover border-2 border-transparent hover:border-[#1e3e50] cursor-pointer transition shadow-2xs hover:scale-105" data-src="${av}" title="Pilih avatar preset ini">
               `).join('')}
-              <label for="prof-upload-file" class="w-10 h-10 rounded-xl border-2 border-dashed border-[#2c6673]/50 hover:border-[#1e3e50] bg-white flex items-center justify-center cursor-pointer text-[#2c6673] hover:text-[#1e3e50] transition shrink-0 shadow-2xs" title="Upload Foto dari Perangkat (Galeri HP / File Komputer)">
+              <label for="prof-upload-file" id="btn-preset-upload-photo" class="w-10 h-10 rounded-xl border-2 border-dashed border-[#2c6673]/50 hover:border-[#1e3e50] bg-white flex items-center justify-center cursor-pointer text-[#2c6673] hover:text-[#1e3e50] transition shrink-0 shadow-2xs" title="Upload Foto dari Perangkat (Galeri HP / File Komputer)">
                 <span class="material-symbols-outlined text-[20px]">add_photo_alternate</span>
               </label>
               <span class="text-xs text-slate-400 ml-1">← Klik ikon kamera untuk memilih foto dari HP atau komputer</span>
@@ -10098,7 +10219,7 @@ function setupSettingsListeners(container) {
     renderSettings(container);
   });
 
-  // Profile Preset Avatars Click
+  // Profile Preset Avatars Click (Auto-save Immediately)
   container.querySelectorAll(".btn-select-preset-avatar").forEach(btn => {
     btn.addEventListener("click", (e) => {
       const src = e.currentTarget.getAttribute("data-src");
@@ -10106,10 +10227,30 @@ function setupSettingsListeners(container) {
       const imgPreview = document.getElementById("preview-avatar-img");
       if (urlInput) urlInput.value = src;
       if (imgPreview) imgPreview.src = src;
+
+      // Auto-save preset avatar ke sesi & database
+      const res = auth.updateProfile({ avatar: src });
+      if (res.success) {
+        if (window.app && typeof window.app.updateSidebarUserProfile === "function") {
+          window.app.updateSidebarUserProfile();
+        }
+        if (window.showToast) {
+          window.showToast("✅ Avatar profil berhasil diganti!", "success");
+        }
+      }
     });
   });
 
-  // Upload Local Avatar File to Data URL with Compression
+  // Explicit Event Listeners Triggering Native File Picker (Fallback & Multi-device Safe)
+  const fileInputEl = document.getElementById("prof-upload-file");
+  const triggerNativeFilePicker = () => {
+    if (fileInputEl) fileInputEl.click();
+  };
+  document.getElementById("btn-upload-profile-photo")?.addEventListener("click", triggerNativeFilePicker);
+  document.getElementById("preview-avatar-container")?.addEventListener("click", triggerNativeFilePicker);
+  document.getElementById("btn-preset-upload-photo")?.addEventListener("click", triggerNativeFilePicker);
+
+  // Upload Local Avatar File to Data URL with Compression & Auto-Save
   document.getElementById("prof-upload-file")?.addEventListener("change", async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -10118,8 +10259,8 @@ function setupSettingsListeners(container) {
     if (statusEl) {
       statusEl.classList.remove("hidden");
       statusEl.innerHTML = `
-        <span class="material-symbols-outlined text-[15px] animate-spin text-[#1b6274]">progress_activity</span>
-        <span>Mengoptimalkan foto profil (${Math.round(file.size / 1024)} KB)...</span>
+        <span class="material-symbols-outlined text-[16px] animate-spin text-[#1b6274]">progress_activity</span>
+        <span>Mengompres &amp; mengunggah foto profil (${Math.round(file.size / 1024)} KB)...</span>
       `;
     }
 
@@ -10130,22 +10271,43 @@ function setupSettingsListeners(container) {
       if (urlInput) urlInput.value = compressedDataUrl;
       if (imgPreview) imgPreview.src = compressedDataUrl;
 
+      // 1. AUTO-SAVE LANGSUNG KE PROFIL AKUN (LocalStorage & Realtime Supabase)
+      const res = auth.updateProfile({ avatar: compressedDataUrl });
+      if (!res.success) {
+        throw new Error(res.message || "Gagal menyimpan foto ke database profil.");
+      }
+
+      // 2. PERBARUI SEMUA TAMPILAN FOTO PROFIL DI SELURUH APLIKASI SECARA INSTAN
+      if (window.app && typeof window.app.updateSidebarUserProfile === "function") {
+        window.app.updateSidebarUserProfile();
+      }
+
+      // 3. TAMPILKAN BANNER & TOAST SUKSES
       if (statusEl) {
+        statusEl.classList.remove("hidden");
         statusEl.innerHTML = `
           <span class="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
-          <span class="text-emerald-800 font-semibold">Foto siap! Klik "Simpan Perubahan Profil" di bawah untuk menerapkan.</span>
+          <span class="text-emerald-800 font-bold">✅ Foto profil berhasil diupload &amp; tersimpan otomatis!</span>
         `;
       }
-      if (window.showToast) window.showToast("📷 Foto profil berhasil dipilih dan dioptimalkan!", "info");
+      if (window.showToast) {
+        window.showToast("✅ Foto profil berhasil diupload dan disimpan ke akun Anda!", "success");
+      }
     } catch (err) {
-      console.error("Gagal mengompresi foto profil:", err);
+      console.error("Gagal memproses foto profil:", err);
       if (statusEl) {
+        statusEl.classList.remove("hidden");
         statusEl.innerHTML = `
           <span class="material-symbols-outlined text-[18px] text-rose-500">error</span>
-          <span class="text-rose-600">${err.message || 'Gagal memproses gambar'}</span>
+          <span class="text-rose-600 font-semibold">${err.message || 'Gagal memproses gambar'}</span>
         `;
       }
-      if (window.showToast) window.showToast(`❌ ${err.message || 'Gagal memproses foto'}`, "error");
+      if (window.showToast) {
+        window.showToast(`❌ ${err.message || 'Gagal memproses foto'}`, "error");
+      }
+    } finally {
+      // PENTING: Kosongkan nilai input agar memilih file yang sama tetap memicu event 'change'
+      e.target.value = "";
     }
   });
 
@@ -10316,6 +10478,8 @@ function setupSettingsListeners(container) {
         if (window.showToast) window.showToast("📷 Foto profil pengguna siap disimpan!", "info");
       } catch (err) {
         if (window.showToast) window.showToast(`❌ ${err.message || 'Gagal memproses foto'}`, "error");
+      } finally {
+        e.target.value = "";
       }
     });
 
