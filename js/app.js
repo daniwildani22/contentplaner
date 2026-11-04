@@ -257,20 +257,48 @@ class App {
     const user = auth.getCurrentUser();
     if (!user) return;
 
+    const avatar = user.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+    const name = user.name || "User";
+    const email = user.email || "";
+    const role = user.role || "Member";
+    const firstName = name.split(" ")[0];
+
+    // 1. Desktop Sidebar User Profile
     const avatarEl = document.getElementById("sidebar-user-avatar");
     const nameEl = document.getElementById("sidebar-user-name");
     const emailEl = document.getElementById("sidebar-user-email");
     const roleEl = document.getElementById("sidebar-user-role");
-    const greetingEl = document.getElementById("header-greeting-user");
 
-    if (avatarEl && user.avatar) avatarEl.src = user.avatar;
-    if (nameEl) nameEl.textContent = user.name || "User";
-    if (emailEl) emailEl.textContent = user.email || "";
-    if (roleEl) roleEl.textContent = user.role || "Member";
-    if (greetingEl) {
-      const firstName = (user.name || "Rian").split(" ")[0];
-      greetingEl.textContent = `Welcome ${firstName} !`;
-    }
+    if (avatarEl) avatarEl.src = avatar;
+    if (nameEl) nameEl.textContent = name;
+    if (emailEl) emailEl.textContent = email;
+    if (roleEl) roleEl.textContent = role;
+
+    // 2. Top Header User Profile & Dropdown (Desktop & Mobile)
+    const greetingEl = document.getElementById("header-greeting-user");
+    const headerAvatarEl = document.getElementById("header-user-avatar");
+    const headerNameEl = document.getElementById("header-user-name");
+    const headerRoleEl = document.getElementById("header-user-role");
+    const headerDropName = document.getElementById("header-dropdown-name");
+    const headerDropRole = document.getElementById("header-dropdown-role");
+
+    if (greetingEl) greetingEl.textContent = `Welcome ${firstName} !`;
+    if (headerAvatarEl) headerAvatarEl.src = avatar;
+    if (headerNameEl) headerNameEl.textContent = name;
+    if (headerRoleEl) headerRoleEl.textContent = role;
+    if (headerDropName) headerDropName.textContent = name;
+    if (headerDropRole) headerDropRole.textContent = role;
+
+    // 3. Mobile Slide-Over Drawer User Profile
+    const mobileAvatarEl = document.getElementById("mobile-user-avatar");
+    const mobileNameEl = document.getElementById("mobile-user-name");
+    const mobileEmailEl = document.getElementById("mobile-user-email");
+    const mobileRoleEl = document.getElementById("mobile-user-role");
+
+    if (mobileAvatarEl) mobileAvatarEl.src = avatar;
+    if (mobileNameEl) mobileNameEl.textContent = name;
+    if (mobileEmailEl) mobileEmailEl.textContent = email;
+    if (mobileRoleEl) mobileRoleEl.textContent = role;
   }
 
   navigate(route) {
@@ -525,6 +553,21 @@ class App {
 
     openBtn?.addEventListener("click", () => drawer?.classList.remove("hidden"));
     closeBtn?.addEventListener("click", () => drawer?.classList.add("hidden"));
+
+    // Header User Profile Menu Toggle & Dropdown Dismissal
+    const headerUserMenuBtn = document.getElementById("btn-header-user-menu");
+    const headerUserDropdown = document.getElementById("header-user-dropdown");
+
+    headerUserMenuBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      headerUserDropdown?.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (headerUserDropdown && !headerUserDropdown.contains(e.target) && !headerUserMenuBtn?.contains(e.target)) {
+        headerUserDropdown.classList.add("hidden");
+      }
+    });
 
     // Theme Toggle Mock Pill
     const themeBtn = document.getElementById("theme-toggle-btn");

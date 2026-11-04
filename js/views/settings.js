@@ -545,6 +545,41 @@ function renderProfileTab(currentUser, users) {
           </div>
         </div>
       </div>
+
+      <!-- ================================================================= -->
+      <!-- SECTION 3: SESI LOGIN & KONTROL LOGOUT                             -->
+      <!-- ================================================================= -->
+      <div class="bg-white p-6 sm:p-7 rounded-3xl border border-[#d2e2ec] shadow-sm space-y-4">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+          <div class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+            <span class="material-symbols-outlined text-[20px]">lock_person</span>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-base text-[#143242]">Sesi Akun &amp; Keamanan</h3>
+            <p class="text-xs text-[#5c7786]">Kelola sesi login aktif Anda pada perangkat ini.</p>
+          </div>
+        </div>
+
+        <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <img src="${currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}" alt="Avatar" class="w-12 h-12 rounded-full object-cover ring-2 ring-slate-300 shrink-0">
+            <div>
+              <p class="font-bold text-sm text-[#143242]">${currentUser.name || 'User'}</p>
+              <p class="text-xs text-[#5c7786]">${currentUser.email || 'Email belum diatur'} • Role: <strong class="text-[#1b6274]">${currentUser.role || 'Member'}</strong></p>
+              <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 mt-0.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>Sesi Aktif di Perangkat Ini</span>
+              </span>
+            </div>
+          </div>
+
+          <button type="button" onclick="window.handleAppLogout()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 shrink-0">
+            <span class="material-symbols-outlined text-[18px]">logout</span>
+            <span>Keluar / Logout dari Akun Ini</span>
+          </button>
+        </div>
+      </div>
+
     </div>
   `;
 }

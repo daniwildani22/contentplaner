@@ -1,7 +1,7 @@
 ﻿/**
  * ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER - COMPLETE APPLICATION BUNDLE
  * Standalone Zero-Dependency Build (Works directly via file:/// and http://)
- * Generated: 2026-11-04 13:08:21
+ * Generated: 2026-11-04 13:31:06
  */
 (function(window, document) {
 'use strict';
@@ -9764,6 +9764,41 @@ function renderProfileTab(currentUser, users) {
           </div>
         </div>
       </div>
+
+      <!-- ================================================================= -->
+      <!-- SECTION 3: SESI LOGIN & KONTROL LOGOUT                             -->
+      <!-- ================================================================= -->
+      <div class="bg-white p-6 sm:p-7 rounded-3xl border border-[#d2e2ec] shadow-sm space-y-4">
+        <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+          <div class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+            <span class="material-symbols-outlined text-[20px]">lock_person</span>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-base text-[#143242]">Sesi Akun &amp; Keamanan</h3>
+            <p class="text-xs text-[#5c7786]">Kelola sesi login aktif Anda pada perangkat ini.</p>
+          </div>
+        </div>
+
+        <div class="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <img src="${currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}" alt="Avatar" class="w-12 h-12 rounded-full object-cover ring-2 ring-slate-300 shrink-0">
+            <div>
+              <p class="font-bold text-sm text-[#143242]">${currentUser.name || 'User'}</p>
+              <p class="text-xs text-[#5c7786]">${currentUser.email || 'Email belum diatur'} • Role: <strong class="text-[#1b6274]">${currentUser.role || 'Member'}</strong></p>
+              <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 mt-0.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>Sesi Aktif di Perangkat Ini</span>
+              </span>
+            </div>
+          </div>
+
+          <button type="button" onclick="window.handleAppLogout()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 shrink-0">
+            <span class="material-symbols-outlined text-[18px]">logout</span>
+            <span>Keluar / Logout dari Akun Ini</span>
+          </button>
+        </div>
+      </div>
+
     </div>
   `;
 }
@@ -10600,20 +10635,48 @@ class App {
     const user = auth.getCurrentUser();
     if (!user) return;
 
+    const avatar = user.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
+    const name = user.name || "User";
+    const email = user.email || "";
+    const role = user.role || "Member";
+    const firstName = name.split(" ")[0];
+
+    // 1. Desktop Sidebar User Profile
     const avatarEl = document.getElementById("sidebar-user-avatar");
     const nameEl = document.getElementById("sidebar-user-name");
     const emailEl = document.getElementById("sidebar-user-email");
     const roleEl = document.getElementById("sidebar-user-role");
-    const greetingEl = document.getElementById("header-greeting-user");
 
-    if (avatarEl && user.avatar) avatarEl.src = user.avatar;
-    if (nameEl) nameEl.textContent = user.name || "User";
-    if (emailEl) emailEl.textContent = user.email || "";
-    if (roleEl) roleEl.textContent = user.role || "Member";
-    if (greetingEl) {
-      const firstName = (user.name || "Rian").split(" ")[0];
-      greetingEl.textContent = `Welcome ${firstName} !`;
-    }
+    if (avatarEl) avatarEl.src = avatar;
+    if (nameEl) nameEl.textContent = name;
+    if (emailEl) emailEl.textContent = email;
+    if (roleEl) roleEl.textContent = role;
+
+    // 2. Top Header User Profile & Dropdown (Desktop & Mobile)
+    const greetingEl = document.getElementById("header-greeting-user");
+    const headerAvatarEl = document.getElementById("header-user-avatar");
+    const headerNameEl = document.getElementById("header-user-name");
+    const headerRoleEl = document.getElementById("header-user-role");
+    const headerDropName = document.getElementById("header-dropdown-name");
+    const headerDropRole = document.getElementById("header-dropdown-role");
+
+    if (greetingEl) greetingEl.textContent = `Welcome ${firstName} !`;
+    if (headerAvatarEl) headerAvatarEl.src = avatar;
+    if (headerNameEl) headerNameEl.textContent = name;
+    if (headerRoleEl) headerRoleEl.textContent = role;
+    if (headerDropName) headerDropName.textContent = name;
+    if (headerDropRole) headerDropRole.textContent = role;
+
+    // 3. Mobile Slide-Over Drawer User Profile
+    const mobileAvatarEl = document.getElementById("mobile-user-avatar");
+    const mobileNameEl = document.getElementById("mobile-user-name");
+    const mobileEmailEl = document.getElementById("mobile-user-email");
+    const mobileRoleEl = document.getElementById("mobile-user-role");
+
+    if (mobileAvatarEl) mobileAvatarEl.src = avatar;
+    if (mobileNameEl) mobileNameEl.textContent = name;
+    if (mobileEmailEl) mobileEmailEl.textContent = email;
+    if (mobileRoleEl) mobileRoleEl.textContent = role;
   }
 
   navigate(route) {
@@ -10868,6 +10931,21 @@ class App {
 
     openBtn?.addEventListener("click", () => drawer?.classList.remove("hidden"));
     closeBtn?.addEventListener("click", () => drawer?.classList.add("hidden"));
+
+    // Header User Profile Menu Toggle & Dropdown Dismissal
+    const headerUserMenuBtn = document.getElementById("btn-header-user-menu");
+    const headerUserDropdown = document.getElementById("header-user-dropdown");
+
+    headerUserMenuBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      headerUserDropdown?.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (headerUserDropdown && !headerUserDropdown.contains(e.target) && !headerUserMenuBtn?.contains(e.target)) {
+        headerUserDropdown.classList.add("hidden");
+      }
+    });
 
     // Theme Toggle Mock Pill
     const themeBtn = document.getElementById("theme-toggle-btn");

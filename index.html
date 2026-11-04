@@ -206,7 +206,7 @@
     <!-- ===================================================================== -->
     <!-- 1. LEFT DEEP SLATE-TEAL SIDEBAR (#1e3e50)                             -->
     <!-- ===================================================================== -->
-    <aside class="hidden lg:flex flex-col w-64 bg-[#1e3e50] text-[#a5c3d4] justify-between shrink-0 select-none border-r border-[#152e3d]">
+    <aside class="hidden lg:flex flex-col w-64 max-h-screen bg-[#1e3e50] text-[#a5c3d4] justify-between shrink-0 select-none border-r border-[#152e3d] overflow-y-auto">
       <div class="flex flex-col">
         
         <!-- User Profile Header Cell (Matching Reference Image 1 & 2) -->
@@ -309,9 +309,9 @@
           <span class="font-semibold text-white">Connected</span>
         </button>
 
-        <button id="btn-sidebar-logout" onclick="window.handleAppLogout()" class="flex items-center gap-2 px-3 py-1.5 text-[12px] text-[#93b7cc] hover:text-white transition-colors w-full text-left">
+        <button id="btn-sidebar-logout" onclick="window.handleAppLogout()" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-600 border border-rose-500/20 transition-all w-full text-left">
           <span class="material-symbols-outlined text-[18px]">logout</span>
-          <span>Ganti Akun / Logout</span>
+          <span>Keluar / Logout</span>
         </button>
       </div>
     </aside>
@@ -396,6 +396,40 @@
               </button>
             </div>
           </div>
+
+          <!-- User Profile & Quick Logout Dropdown (Visible across Desktop, Tablet & Mobile Header) -->
+          <div class="relative" id="header-user-menu-container">
+            <button id="btn-header-user-menu" class="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-full bg-white border border-[#cde0ec] hover:border-[#2c6673] shadow-sm transition-all focus:outline-none" title="Menu Akun & Logout">
+              <img id="header-user-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" alt="Avatar" class="w-8 h-8 rounded-full object-cover ring-1 ring-[#cde0ec]">
+              <div class="hidden md:flex flex-col text-left leading-tight pr-1">
+                <span id="header-user-name" class="font-bold text-xs text-[#1e3e50] max-w-[110px] truncate">User</span>
+                <span id="header-user-role" class="text-[10px] text-[#5f8296] font-medium">Member</span>
+              </div>
+              <span class="material-symbols-outlined text-[16px] text-[#799cb0] hidden sm:inline">expand_more</span>
+            </button>
+
+            <!-- User Menu Dropdown -->
+            <div id="header-user-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-[#cde0ec] py-2 z-50 text-xs">
+              <div class="px-4 py-2.5 border-b border-slate-100">
+                <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Masuk Sebagai</p>
+                <p id="header-dropdown-name" class="font-bold text-[#1e3e50] truncate">User</p>
+                <span id="header-dropdown-role" class="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9.5px] font-bold bg-[#e3f4f8] text-[#1b6274]">Member</span>
+              </div>
+              <a href="#settings" onclick="if(window.setActiveSettingsTab) window.setActiveSettingsTab('profile'); document.getElementById('header-user-dropdown')?.classList.add('hidden');" class="flex items-center gap-2.5 px-4 py-2.5 hover:bg-[#eaf2f7] text-[#1e3e50] font-medium transition">
+                <span class="material-symbols-outlined text-[18px] text-[#2c6673]">person</span>
+                <span>Profil &amp; Akun Saya</span>
+              </a>
+              <a href="#settings" onclick="document.getElementById('header-user-dropdown')?.classList.add('hidden');" class="flex items-center gap-2.5 px-4 py-2.5 hover:bg-[#eaf2f7] text-[#1e3e50] font-medium transition">
+                <span class="material-symbols-outlined text-[18px] text-[#2c6673]">settings</span>
+                <span>Pengaturan Sistem</span>
+              </a>
+              <div class="border-t border-slate-100 my-1"></div>
+              <button type="button" onclick="document.getElementById('header-user-dropdown')?.classList.add('hidden'); window.handleAppLogout();" class="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-rose-50 text-rose-600 font-bold transition text-left">
+                <span class="material-symbols-outlined text-[18px] text-rose-500">logout</span>
+                <span>Keluar / Logout Akun</span>
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -450,6 +484,16 @@
           <button class="p-1 rounded-lg text-slate-400 hover:text-white" onclick="document.getElementById('mobile-drawer').classList.add('hidden')">
             <span class="material-symbols-outlined text-[20px]">close</span>
           </button>
+        </div>
+
+        <!-- Mobile Drawer User Profile Header -->
+        <div class="p-3.5 rounded-2xl bg-[#173241]/90 border border-[#2b5168] flex items-center gap-3 cursor-pointer hover:bg-[#173241] transition" onclick="document.getElementById('mobile-drawer').classList.add('hidden'); window.location.hash='#settings'; if(window.setActiveSettingsTab) window.setActiveSettingsTab('profile');" title="Buka Profil Saya">
+          <img id="mobile-user-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" alt="Avatar" class="w-11 h-11 rounded-full object-cover ring-2 ring-[#457088] shrink-0">
+          <div class="min-w-0 flex-1">
+            <h4 id="mobile-user-name" class="font-bold text-white text-xs truncate">User</h4>
+            <p id="mobile-user-email" class="text-[10.5px] text-[#7ea1b5] truncate">user@creatorhub.id</p>
+            <span id="mobile-user-role" class="inline-block mt-1 text-[9px] font-semibold uppercase tracking-wider text-[#98cfe2] bg-white/10 px-2 py-0.5 rounded-full">Member</span>
+          </div>
         </div>
 
         <nav class="space-y-1 text-xs font-medium">
@@ -508,8 +552,17 @@
         </nav>
       </div>
 
-      <div class="pt-4 border-t border-[#294d62] text-[11px] text-[#7ea1b5]">
-        CreatorHub OS v1.0
+      <div class="pt-4 border-t border-[#294d62] space-y-3 shrink-0">
+        <!-- Prominent Logout Button for Mobile Devices -->
+        <button type="button" onclick="document.getElementById('mobile-drawer').classList.add('hidden'); window.handleAppLogout();" class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-lg transition-all active:scale-[0.98]">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
+          <span>Keluar / Logout Akun</span>
+        </button>
+
+        <div class="flex items-center justify-between text-[10px] text-[#7ea1b5] px-1">
+          <span>CreatorHub OS v1.0</span>
+          <span>Multi-Device Sync</span>
+        </div>
       </div>
     </div>
   </div>
