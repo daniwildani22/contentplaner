@@ -20,17 +20,27 @@ export function renderDashboard(container) {
   const totalFollowers = socialAccounts.reduce((acc, a) => acc + (Number(a.followers) || 0), 0);
   const formattedFollowers = totalFollowers > 0 ? `${(totalFollowers / 1000).toFixed(0)} K` : "583 K";
   
-  const totalActiveContent = contents.length > 0 ? (contents.length * 450 + 83) : 5483;
-  const totalTasksCount = tasks.length > 0 ? (tasks.length * 280 + 59) : 2859;
-  const totalViewsCount = metrics.performance.totalViews > 0 ? `${(metrics.performance.totalViews / 1000).toFixed(0)}` : "5483";
-  const overdueCount = metrics.overdueTasks > 0 ? metrics.overdueTasks : 38;
+  const totalActiveContent = contents.length;
+  const totalTasksCount = tasks.length;
+  const totalViewsCount = metrics.performance.totalViews > 0 ? `${(metrics.performance.totalViews / 1000).toFixed(0)} K` : "0";
+  const overdueCount = metrics.overdueTasks;
 
-  // Urgent tasks list for Critical Tasks widget
-  const criticalTasks = [
-    { title: "Revisi Audio v2 (Shopee 10.10)", sub: "Editor: Andi • Final Cut Pro", tag: "Urgent -2 Jam", tagClass: "bg-[#fdede7] text-[#932e14]" },
-    { title: "B-Roll Macro Shooting (Galaxy Fold6)", sub: "Camera: Dimas • Studio A", tag: "Sisa 3 Jam", tagClass: "bg-[#e3f4f8] text-[#1b6274]" },
-    { title: "Publish Video TikTok Desk Setup", sub: "PIC: Maya • Schedule 19:30", tag: "Ready to Post", tagClass: "bg-[#e7f6f0] text-[#1c7b57]" }
-  ];
+  // Urgent tasks list for Critical Tasks widget from actual store tasks
+  const criticalTasks = tasks
+    .filter(t => t.priority === "Urgent" || t.priority === "High" || t.status === "Revision" || t.status === "In Progress")
+    .slice(0, 4)
+    .map(t => {
+      const tag = t.priority === "Urgent" ? "Urgent" : t.status === "Revision" ? "Revisi" : t.deadline || "Hari Ini";
+      const tagClass = t.priority === "Urgent" ? "bg-[#fdede7] text-[#932e14]" : t.status === "Revision" ? "bg-[#fdf2e9] text-[#c05621]" : "bg-[#e3f4f8] text-[#1b6274]";
+      return {
+        id: t.task_id,
+        title: t.task_title,
+        sub: `PIC: ${t.assigned_user || 'Studio'} • ${t.status || 'To Do'}`,
+        tag: tag,
+        tagClass: tagClass,
+        status: t.status
+      };
+    });
 
   // Top platform performance ranking (matching Image 2)
   const rankingStores = [
@@ -281,26 +291,36 @@ export function renderDashboard(container) {
                 <span>Critical Tasks &amp; Deadlines</span>
               </h3>
               <span class="text-[11px] font-semibold text-[#8b3b22] bg-[#fdede7] px-2 py-0.5 rounded-full border border-[#f5cdbf]">
-                3 Hari Ini
+                ${criticalTasks.length} Pekerjaan
               </span>
             </div>
 
             <!-- Task List -->
             <div class="space-y-2.5">
-              ${criticalTasks.map(item => `
+              ${criticalTasks.length > 0 ? criticalTasks.map(item => `
                 <div class="p-2.5 rounded-xl bg-[#f8fbfe] border border-[#d6e5ef] flex items-center justify-between gap-2.5 hover:bg-[#f0f6fa] transition-colors">
                   <div class="flex items-center gap-2.5">
-                    <input class="w-4 h-4 rounded text-[#1b3b4d] border-slate-300 focus:ring-0 cursor-pointer" type="checkbox">
+                    <input class="w-4 h-4 rounded text-[#1b3b4d] border-slate-300 focus:ring-0 cursor-pointer" type="checkbox" onchange="window.toggleDashboardTask('${item.id}', this.checked)">
                     <div>
                       <h4 class="text-[12.5px] font-bold text-[#112d3d] leading-tight">${item.title}</h4>
                       <span class="text-[10.5px] text-[#637f90]">${item.sub}</span>
                     </div>
                   </div>
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap ${item.tagClass}">
-                    ${item.tag}
-                  </span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap ${item.tagClass}">
+                      ${item.tag}
+                    </span>
+                    <button onclick="window.confirmDeleteTask('${item.id}')" class="p-1 text-slate-300 hover:text-rose-600 transition" title="Hapus Tugas">
+                      <span class="material-symbols-outlined text-[15px]">delete</span>
+                    </button>
+                  </div>
                 </div>
-              `).join('')}
+              `).join('') : `
+                <div class="p-6 rounded-xl border border-dashed border-[#d6e5ef] bg-[#f8fbfe] text-center text-xs text-slate-400">
+                  <span class="material-symbols-outlined text-[24px] text-emerald-600 block mb-1">task_alt</span>
+                  Tidak ada tugas mendesak atau deadline kritis saat ini.
+                </div>
+              `}
             </div>
           </div>
 
@@ -322,3 +342,15 @@ export function renderDashboard(container) {
     </div>
   `;
 }
+
+window.toggleDashboardTask = (taskId, isChecked) => {
+  store.updateItem(SHEET_NAMES.CONTENT_TASKS, taskId, {
+    status: isChecked ? "Completed" : "In Progress",
+    progress: isChecked ? 100 : 50
+  });
+  if (window.showToast) {
+    window.showToast(isChecked ? "✅ Tugas ditandai selesai!" : "Tugas kembali dikerjakan", "info");
+  }
+  const container = document.getElementById("main-view-container");
+  if (container) renderDashboard(container);
+};

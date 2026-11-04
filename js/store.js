@@ -803,6 +803,56 @@ class Store {
   }
 
   /**
+   * Menghapus seluruh tugas pekerjaan (Tasks & Subtasks)
+   */
+  clearAllTasks() {
+    const tasks = [...(this.state[SHEET_NAMES.CONTENT_TASKS] || [])];
+    tasks.forEach(t => {
+      this.deleteItem(SHEET_NAMES.CONTENT_TASKS, t.task_id);
+    });
+    const subtasks = [...(this.state[SHEET_NAMES.CONTENT_SUBTASKS] || [])];
+    subtasks.forEach(s => {
+      this.deleteItem(SHEET_NAMES.CONTENT_SUBTASKS, s.subtask_id);
+    });
+    this.state[SHEET_NAMES.CONTENT_TASKS] = [];
+    this.state[SHEET_NAMES.CONTENT_SUBTASKS] = [];
+    this.persist();
+    this.notify({ type: "CLEAR_TASKS" });
+  }
+
+  /**
+   * Menghapus seluruh data operasional kerja demo (Clean Slate)
+   * Tetap menjaga data pengguna (Users), brand (Brands), dan pengaturan (Settings)
+   */
+  clearWorkData() {
+    const workSheets = [
+      SHEET_NAMES.CONTENT_TASKS,
+      SHEET_NAMES.CONTENT_SUBTASKS,
+      SHEET_NAMES.CONTENT_PLANNING,
+      SHEET_NAMES.CONTENT_SCRIPTS,
+      SHEET_NAMES.CONTENT_PRODUCTION,
+      SHEET_NAMES.CONTENT_REVISIONS,
+      SHEET_NAMES.CONTENT_PUBLICATIONS,
+      SHEET_NAMES.CONTENT_CALENDAR,
+      SHEET_NAMES.TIME_TRACKING
+    ];
+
+    workSheets.forEach(sheet => {
+      const items = [...(this.state[sheet] || [])];
+      items.forEach(item => {
+        const id = this.getPrimaryId(item);
+        if (id) {
+          this.deleteItem(sheet, id);
+        }
+      });
+      this.state[sheet] = [];
+    });
+
+    this.persist();
+    this.notify({ type: "CLEAR_WORK_DATA" });
+  }
+
+  /**
    * Rumus Engagement Rate: ((Likes + Comments + Shares + Saves) / Views) * 100%
    */
   calculateEngagementRate(views, likes = 0, comments = 0, shares = 0, saves = 0) {

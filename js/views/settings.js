@@ -552,6 +552,27 @@ function renderProfileTab(currentUser, users) {
 function renderDataTab() {
   return `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Clean Slate: Kosongkan Data Pekerjaan Demo -->
+      <div class="bg-white p-6 rounded-2xl border border-amber-200 bg-amber-50/20 shadow-sm space-y-4">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🧹</span>
+          <div>
+            <h3 class="font-extrabold text-sm text-[#8c5310]">Kosongkan Data Pekerjaan Demo (Clean Slate)</h3>
+            <p class="text-xs text-slate-500">Mulai dari nol: bersihkan seluruh tugas, ide, naskah, dan kalender demo</p>
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Tindakan ini akan mengosongkan seluruh data operasional kerja (Papan Tugas Kanban, Subtask, Ide Konten, Naskah Script, Shooting Log, Revisi Video, Kalender, dan Stopwatch). 
+          <strong>Akun Pengguna Tim, Profil, Brand, dan Pengaturan Sistem Anda akan tetap aman.</strong>
+        </p>
+
+        <button id="btn-clear-work-data" class="py-2.5 px-4 rounded-xl bg-[#c05621] hover:bg-[#9c4217] text-white font-bold text-xs transition shadow-xs flex items-center gap-2">
+          <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+          <span>Kosongkan Semua Data Pekerjaan Demo</span>
+        </button>
+      </div>
+
       <!-- JSON Backup & Restore -->
       <div class="bg-white p-6 rounded-2xl border border-[#d2e2ec] shadow-sm space-y-4">
         <div class="flex items-center gap-2">
@@ -575,17 +596,17 @@ function renderDataTab() {
       </div>
 
       <!-- Danger Zone -->
-      <div class="bg-white p-6 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-sm space-y-4">
+      <div class="bg-white p-6 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-sm space-y-4 md:col-span-2">
         <div class="flex items-center gap-2">
           <span class="text-2xl">⚠️</span>
           <div>
-            <h3 class="font-extrabold text-sm text-rose-900">Danger Zone: Reset Database</h3>
+            <h3 class="font-extrabold text-sm text-rose-900">Danger Zone: Reset Database ke Default</h3>
             <p class="text-xs text-rose-600">Kembalikan seluruh database ke data awal standar pabrik</p>
           </div>
         </div>
 
         <p class="text-xs text-slate-600 leading-relaxed">
-          Tindakan ini akan mengosongkan perubahan lokal di browser Anda dan mengembalikan 25 sheet ke starter dataset resmi.
+          Tindakan ini akan mengosongkan perubahan lokal di browser Anda dan mengembalikan seluruh 25 sheet ke dataset contoh pabrik.
         </p>
 
         <button id="btn-reset-database" class="py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition shadow-xs">
@@ -1076,6 +1097,17 @@ function setupSettingsListeners(container) {
       }
     };
     reader.readAsText(file);
+  });
+
+  // Clean Slate: Kosongkan Data Pekerjaan Demo
+  document.getElementById("btn-clear-work-data")?.addEventListener("click", () => {
+    if (confirm("⚠️ PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SEMUA data pekerjaan demo?\n\nPapan tugas, ide konten, naskah script, kalender, dan waktu kerja akan dikosongkan secara bersih sehingga Anda dapat mulai mengisi pekerjaan nyata tim Anda.\n\nAkun pengguna tim, profil, brand mitra, dan pengaturan sistem Anda akan tetap aman.")) {
+      store.clearWorkData();
+      if (window.showToast) {
+        window.showToast("🧹 Seluruh data pekerjaan demo berhasil dikosongkan!", "success");
+      }
+      renderSettings(container);
+    }
   });
 
   // Reset Database

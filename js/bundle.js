@@ -1,7 +1,7 @@
 ﻿/**
  * ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER - COMPLETE APPLICATION BUNDLE
  * Standalone Zero-Dependency Build (Works directly via file:/// and http://)
- * Generated: 2026-11-03 20:29:24
+ * Generated: 2026-11-04 10:38:23
  */
 (function(window, document) {
 'use strict';
@@ -1321,6 +1321,56 @@ class Store {
   }
 
   /**
+   * Menghapus seluruh tugas pekerjaan (Tasks & Subtasks)
+   */
+  clearAllTasks() {
+    const tasks = [...(this.state[SHEET_NAMES.CONTENT_TASKS] || [])];
+    tasks.forEach(t => {
+      this.deleteItem(SHEET_NAMES.CONTENT_TASKS, t.task_id);
+    });
+    const subtasks = [...(this.state[SHEET_NAMES.CONTENT_SUBTASKS] || [])];
+    subtasks.forEach(s => {
+      this.deleteItem(SHEET_NAMES.CONTENT_SUBTASKS, s.subtask_id);
+    });
+    this.state[SHEET_NAMES.CONTENT_TASKS] = [];
+    this.state[SHEET_NAMES.CONTENT_SUBTASKS] = [];
+    this.persist();
+    this.notify({ type: "CLEAR_TASKS" });
+  }
+
+  /**
+   * Menghapus seluruh data operasional kerja demo (Clean Slate)
+   * Tetap menjaga data pengguna (Users), brand (Brands), dan pengaturan (Settings)
+   */
+  clearWorkData() {
+    const workSheets = [
+      SHEET_NAMES.CONTENT_TASKS,
+      SHEET_NAMES.CONTENT_SUBTASKS,
+      SHEET_NAMES.CONTENT_PLANNING,
+      SHEET_NAMES.CONTENT_SCRIPTS,
+      SHEET_NAMES.CONTENT_PRODUCTION,
+      SHEET_NAMES.CONTENT_REVISIONS,
+      SHEET_NAMES.CONTENT_PUBLICATIONS,
+      SHEET_NAMES.CONTENT_CALENDAR,
+      SHEET_NAMES.TIME_TRACKING
+    ];
+
+    workSheets.forEach(sheet => {
+      const items = [...(this.state[sheet] || [])];
+      items.forEach(item => {
+        const id = this.getPrimaryId(item);
+        if (id) {
+          this.deleteItem(sheet, id);
+        }
+      });
+      this.state[sheet] = [];
+    });
+
+    this.persist();
+    this.notify({ type: "CLEAR_WORK_DATA" });
+  }
+
+  /**
    * Rumus Engagement Rate: ((Likes + Comments + Shares + Saves) / Views) * 100%
    */
   calculateEngagementRate(views, likes = 0, comments = 0, shares = 0, saves = 0) {
@@ -2132,17 +2182,27 @@ function renderDashboard(container) {
   const totalFollowers = socialAccounts.reduce((acc, a) => acc + (Number(a.followers) || 0), 0);
   const formattedFollowers = totalFollowers > 0 ? `${(totalFollowers / 1000).toFixed(0)} K` : "583 K";
   
-  const totalActiveContent = contents.length > 0 ? (contents.length * 450 + 83) : 5483;
-  const totalTasksCount = tasks.length > 0 ? (tasks.length * 280 + 59) : 2859;
-  const totalViewsCount = metrics.performance.totalViews > 0 ? `${(metrics.performance.totalViews / 1000).toFixed(0)}` : "5483";
-  const overdueCount = metrics.overdueTasks > 0 ? metrics.overdueTasks : 38;
+  const totalActiveContent = contents.length;
+  const totalTasksCount = tasks.length;
+  const totalViewsCount = metrics.performance.totalViews > 0 ? `${(metrics.performance.totalViews / 1000).toFixed(0)} K` : "0";
+  const overdueCount = metrics.overdueTasks;
 
-  // Urgent tasks list for Critical Tasks widget
-  const criticalTasks = [
-    { title: "Revisi Audio v2 (Shopee 10.10)", sub: "Editor: Andi • Final Cut Pro", tag: "Urgent -2 Jam", tagClass: "bg-[#fdede7] text-[#932e14]" },
-    { title: "B-Roll Macro Shooting (Galaxy Fold6)", sub: "Camera: Dimas • Studio A", tag: "Sisa 3 Jam", tagClass: "bg-[#e3f4f8] text-[#1b6274]" },
-    { title: "Publish Video TikTok Desk Setup", sub: "PIC: Maya • Schedule 19:30", tag: "Ready to Post", tagClass: "bg-[#e7f6f0] text-[#1c7b57]" }
-  ];
+  // Urgent tasks list for Critical Tasks widget from actual store tasks
+  const criticalTasks = tasks
+    .filter(t => t.priority === "Urgent" || t.priority === "High" || t.status === "Revision" || t.status === "In Progress")
+    .slice(0, 4)
+    .map(t => {
+      const tag = t.priority === "Urgent" ? "Urgent" : t.status === "Revision" ? "Revisi" : t.deadline || "Hari Ini";
+      const tagClass = t.priority === "Urgent" ? "bg-[#fdede7] text-[#932e14]" : t.status === "Revision" ? "bg-[#fdf2e9] text-[#c05621]" : "bg-[#e3f4f8] text-[#1b6274]";
+      return {
+        id: t.task_id,
+        title: t.task_title,
+        sub: `PIC: ${t.assigned_user || 'Studio'} • ${t.status || 'To Do'}`,
+        tag: tag,
+        tagClass: tagClass,
+        status: t.status
+      };
+    });
 
   // Top platform performance ranking (matching Image 2)
   const rankingStores = [
@@ -2393,26 +2453,36 @@ function renderDashboard(container) {
                 <span>Critical Tasks &amp; Deadlines</span>
               </h3>
               <span class="text-[11px] font-semibold text-[#8b3b22] bg-[#fdede7] px-2 py-0.5 rounded-full border border-[#f5cdbf]">
-                3 Hari Ini
+                ${criticalTasks.length} Pekerjaan
               </span>
             </div>
 
             <!-- Task List -->
             <div class="space-y-2.5">
-              ${criticalTasks.map(item => `
+              ${criticalTasks.length > 0 ? criticalTasks.map(item => `
                 <div class="p-2.5 rounded-xl bg-[#f8fbfe] border border-[#d6e5ef] flex items-center justify-between gap-2.5 hover:bg-[#f0f6fa] transition-colors">
                   <div class="flex items-center gap-2.5">
-                    <input class="w-4 h-4 rounded text-[#1b3b4d] border-slate-300 focus:ring-0 cursor-pointer" type="checkbox">
+                    <input class="w-4 h-4 rounded text-[#1b3b4d] border-slate-300 focus:ring-0 cursor-pointer" type="checkbox" onchange="window.toggleDashboardTask('${item.id}', this.checked)">
                     <div>
                       <h4 class="text-[12.5px] font-bold text-[#112d3d] leading-tight">${item.title}</h4>
                       <span class="text-[10.5px] text-[#637f90]">${item.sub}</span>
                     </div>
                   </div>
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap ${item.tagClass}">
-                    ${item.tag}
-                  </span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap ${item.tagClass}">
+                      ${item.tag}
+                    </span>
+                    <button onclick="window.confirmDeleteTask('${item.id}')" class="p-1 text-slate-300 hover:text-rose-600 transition" title="Hapus Tugas">
+                      <span class="material-symbols-outlined text-[15px]">delete</span>
+                    </button>
+                  </div>
                 </div>
-              `).join('')}
+              `).join('') : `
+                <div class="p-6 rounded-xl border border-dashed border-[#d6e5ef] bg-[#f8fbfe] text-center text-xs text-slate-400">
+                  <span class="material-symbols-outlined text-[24px] text-emerald-600 block mb-1">task_alt</span>
+                  Tidak ada tugas mendesak atau deadline kritis saat ini.
+                </div>
+              `}
             </div>
           </div>
 
@@ -2434,6 +2504,18 @@ function renderDashboard(container) {
     </div>
   `;
 }
+
+window.toggleDashboardTask = (taskId, isChecked) => {
+  store.updateItem(SHEET_NAMES.CONTENT_TASKS, taskId, {
+    status: isChecked ? "Completed" : "In Progress",
+    progress: isChecked ? 100 : 50
+  });
+  if (window.showToast) {
+    window.showToast(isChecked ? "✅ Tugas ditandai selesai!" : "Tugas kembali dikerjakan", "info");
+  }
+  const container = document.getElementById("main-view-container");
+  if (container) renderDashboard(container);
+};
 
 return { renderDashboard: renderDashboard };
 })();
@@ -3376,7 +3458,7 @@ const { renderTasks } = (function() {
  * =========================================================================================
  * ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER - VIEW: TASK MANAGEMENT (MODULE 04)
  * File: js/views/tasks.js
- * Design: Oceanic Inventory Design System (5-Column Kanban Board)
+ * Design: Oceanic Inventory Design System (5-Column Dynamic Kanban Board)
  * =========================================================================================
  */
 // [import stripped]
@@ -3384,174 +3466,52 @@ const { renderTasks } = (function() {
 let taskViewMode = "kanban"; // 'kanban', 'table', 'daily'
 let selectedBrandFilter = "ALL";
 function renderTasks(container) {
-  const allTasks = store.getItems(SHEET_NAMES.CONTENT_TASKS);
-  const allSubtasks = store.getItems(SHEET_NAMES.CONTENT_SUBTASKS);
-  const brands = store.getItems(SHEET_NAMES.BRANDS);
-  const users = store.getItems(SHEET_NAMES.USERS);
+  const allTasks = store.getItems(SHEET_NAMES.CONTENT_TASKS) || [];
+  const allSubtasks = store.getItems(SHEET_NAMES.CONTENT_SUBTASKS) || [];
+  const brands = store.getItems(SHEET_NAMES.BRANDS) || [];
+  const users = store.getItems(SHEET_NAMES.USERS) || [];
 
   // Filter tasks based on brand
   const filteredTasks = allTasks.filter(t => {
-    return selectedBrandFilter === "ALL" || t.brand_id === selectedBrandFilter || (t.brand_name && t.brand_name.includes(selectedBrandFilter));
+    if (selectedBrandFilter === "ALL") return true;
+    return t.brand_id === selectedBrandFilter || (t.brand_name && t.brand_name.includes(selectedBrandFilter));
   });
 
-  // Calculate statistics
-  const totalTasks = allTasks.length > 0 ? allTasks.length : 34;
-  const inProgressTasks = allTasks.filter(t => t.status === "In Progress" || t.status === "Shooting" || t.status === "Editing").length || 8;
-  const inReviewTasks = allTasks.filter(t => t.status === "Review").length || 4;
-  const overdueTasks = allTasks.filter(t => t.priority === "Urgent" || t.status === "Revision").length || 2;
-  const completedTasks = allTasks.filter(t => t.status === "Completed" || t.status === "Published").length || 20;
+  // Calculate dynamic statistics
+  const totalTasks = filteredTasks.length;
+  const colToDo = filteredTasks.filter(t => !t.status || t.status === "To Do" || t.status === "Idea" || t.status === "Planned");
+  const colInProgress = filteredTasks.filter(t => t.status === "In Progress" || t.status === "Shooting");
+  const colEditing = filteredTasks.filter(t => t.status === "Editing" || t.status === "Revision");
+  const colReview = filteredTasks.filter(t => t.status === "Review");
+  const colCompleted = filteredTasks.filter(t => t.status === "Completed" || t.status === "Published");
 
-  // Group tasks into 5 Oceanic Kanban Columns
-  // 1. To Do
-  // 2. In Progress
-  // 3. Editing & Revisi (Spotlighted)
-  // 4. Review
-  // 5. Completed
-  const colToDo = [
-    {
-      id: "TSK-101",
-      priority: "Normal",
-      priorityClass: "bg-[#eaf4fa] text-[#2c6673]",
-      title: "Ideation & Angle Riset: Lensa 50mm f/1.2 vs 85mm",
-      brand: "Lumix Creator Gear • #CT-092",
-      progress: 50,
-      subDone: 2,
-      subTotal: 4,
-      author: "Bagus",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
-      deadline: "Besok",
-      deadlineClass: "text-[#698d9f]"
-    },
-    {
-      id: "TSK-102",
-      priority: "High",
-      priorityClass: "bg-[#fdf2e9] text-[#c05621]",
-      title: "Scriptwriting Video Sponsorship Q3 Campaign",
-      brand: "Nordic Skin Care • #CT-094",
-      progress: 33,
-      subDone: 1,
-      subTotal: 3,
-      author: "Dewi L.",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
-      deadline: "18 Mei",
-      deadlineClass: "text-[#698d9f]"
-    }
-  ];
-
-  const colInProgress = [
-    {
-      id: "TSK-103",
-      priority: "Urgent",
-      priorityClass: "bg-[#fde8e8] text-[#c53030]",
-      title: "Shooting Studio & B-Roll Macro Unboxing",
-      brand: "SoundMax Audio • #CT-088",
-      progress: 60,
-      subDone: 3,
-      subTotal: 5,
-      author: "Rian",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-      deadline: "2 Jam Lagi",
-      deadlineClass: "text-[#c53030] font-semibold"
-    },
-    {
-      id: "TSK-105",
-      priority: "Normal",
-      priorityClass: "bg-[#eaf4fa] text-[#2c6673]",
-      title: "Voice Over Record & Ambience Foley Mix",
-      brand: "Self-Project • #CT-090",
-      progress: 50,
-      subDone: 2,
-      subTotal: 4,
-      author: "Dimas A.",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-      deadline: "20 Mei",
-      deadlineClass: "text-[#698d9f]"
-    }
-  ];
-
-  const colEditing = [
-    {
-      id: "TSK-104",
-      priority: "Urgent",
-      priorityClass: "bg-[#fde8e8] text-[#c53030]",
-      version: "v2 Rev",
-      title: "Color Grading & Sound Design Video Review TWS",
-      brand: "SoundMax Audio • #CT-088",
-      progress: 75,
-      subDone: 3,
-      subTotal: 4,
-      author: "Fahri Editor",
-      avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=100",
-      deadline: "17:00",
-      deadlineClass: "text-[#c53030] font-semibold bg-[#fae2dc] px-2 py-0.5 rounded-full",
-      isSpotlight: true
-    },
-    {
-      id: "TSK-106",
-      priority: "Normal",
-      priorityClass: "bg-[#eaf4fa] text-[#2c6673]",
-      title: "Motion Graphics Intro 3D Logo Sponsor",
-      brand: "Lumix Creator Gear • #CT-092",
-      progress: 50,
-      subDone: 1,
-      subTotal: 2,
-      author: "Fahri",
-      avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=100",
-      deadline: "21 Mei",
-      deadlineClass: "text-[#698d9f]"
-    }
-  ];
-
-  const colReview = [
-    {
-      id: "TSK-100",
-      priority: "High",
-      priorityClass: "bg-[#fdf2e9] text-[#c05621]",
-      title: "Thumbnail A/B Testing & Final Render 4K",
-      brand: "Nordic Skin Care • #CT-087",
-      progress: 90,
-      subDone: 4,
-      subTotal: 4,
-      author: "Rian",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-      deadline: "Client",
-      deadlineClass: "text-[#6e508a] font-semibold"
-    }
-  ];
-
-  const colCompleted = [
-    {
-      id: "TSK-098",
-      priority: "Published",
-      priorityClass: "bg-[#e6f7f2] text-[#21835e]",
-      title: "Publish Instagram Reels & TikTok Keranjang Kuning",
-      brand: "SoundMax Audio • #CT-085",
-      progress: 100,
-      subDone: 5,
-      subTotal: 5,
-      author: "Sarah P.",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
-      deadline: "Sync Drive Ok",
-      deadlineClass: "text-[#21835e] font-semibold"
-    }
-  ];
+  const inProgressTasks = colInProgress.length;
+  const inReviewTasks = colReview.length;
+  const overdueTasks = filteredTasks.filter(t => t.priority === "Urgent" || t.status === "Revision").length;
+  const completedTasks = colCompleted.length;
 
   container.innerHTML = `
     <div class="space-y-6">
 
       <!-- ================================================================= -->
-      <!-- SECTION 1: OVER VIEW STRIP & 5 STAT CARDS (Matching Image 1)       -->
+      <!-- SECTION 1: OVER VIEW STRIP & 5 STAT CARDS                         -->
       <!-- ================================================================= -->
       <section>
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
             <h2 class="text-sm font-bold text-[#1e3e50] tracking-wide">Over View</h2>
-            <span class="text-xs text-[#698c9f] hidden sm:inline">• Connected: Sheet 'Content_Tasks'</span>
+            <span class="text-xs text-[#698c9f] hidden sm:inline">• Database: '${allTasks.length}' Tugas Tersimpan</span>
           </div>
-          <button onclick="window.triggerCloudSync()" class="flex items-center gap-1.5 text-xs text-[#2c6673] hover:text-[#1e3e50] font-semibold transition-colors shadow-2xs bg-white px-3 py-1.5 rounded-full border border-[#d2e2ec]" type="button">
-            <span class="material-symbols-outlined text-[16px]">sync</span>
-            <span>Tarik Data Sheets</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="window.confirmClearAllTasks()" class="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 font-semibold transition-colors bg-white px-3 py-1.5 rounded-full border border-rose-200 shadow-2xs hover:bg-rose-50" type="button" title="Kosongkan seluruh tugas pekerjaan">
+              <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+              <span class="hidden sm:inline">Kosongkan Semua Tugas</span>
+            </button>
+            <button onclick="window.triggerCloudSync()" class="flex items-center gap-1.5 text-xs text-[#2c6673] hover:text-[#1e3e50] font-semibold transition-colors shadow-2xs bg-white px-3 py-1.5 rounded-full border border-[#d2e2ec]" type="button">
+              <span class="material-symbols-outlined text-[16px]">sync</span>
+              <span>Sinkron Data</span>
+            </button>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3.5 sm:gap-4">
@@ -3588,7 +3548,7 @@ function renderTasks(container) {
             </div>
           </div>
 
-          <!-- Stat 4: Terlambat (Overdue) - Soft Peach Alert -->
+          <!-- Stat 4: Terlambat (Overdue) -->
           <div class="bg-[#fcf3f1] rounded-2xl p-4 border border-[#edd7d2] shadow-sm flex items-center justify-between hover:shadow-md transition-all">
             <div>
               <span class="text-xl font-bold text-[#c53030] block">${overdueTasks}</span>
@@ -3632,112 +3592,130 @@ function renderTasks(container) {
           </button>
         </div>
 
-        <!-- Filter Dropdown & Button -->
+        <!-- Filter Dropdown & New Task Button -->
         <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
           <select id="filter-task-brand" class="bg-[#f0f6fa] border border-[#d0e1ec] px-3 py-1.5 rounded-xl text-xs text-[#1e3e50] font-medium focus:outline-none focus:ring-1 focus:ring-[#1e3e50]">
             <option value="ALL">Semua Brand</option>
-            <option value="SoundMax Audio" ${selectedBrandFilter === 'SoundMax Audio' ? 'selected' : ''}>SoundMax Audio</option>
-            <option value="Lumix Creator Gear" ${selectedBrandFilter === 'Lumix Creator Gear' ? 'selected' : ''}>Lumix Creator Gear</option>
-            <option value="Nordic Skin Care" ${selectedBrandFilter === 'Nordic Skin Care' ? 'selected' : ''}>Nordic Skin Care</option>
-            <option value="Self-Project" ${selectedBrandFilter === 'Self-Project' ? 'selected' : ''}>Self-Project (Hub Original)</option>
-            ${brands.map(b => `<option value="${b.brand_name}">${b.brand_name}</option>`).join('')}
+            ${brands.map(b => `<option value="${b.brand_name}" ${selectedBrandFilter === b.brand_name ? 'selected' : ''}>${b.brand_name}</option>`).join('')}
           </select>
-          <button onclick="window.triggerCloudSync()" class="p-1.5 rounded-xl bg-[#f0f6fa] border border-[#d0e1ec] text-[#5b7e92] hover:text-[#1e3e50] transition-colors" title="Sinkronkan Data" type="button">
-            <span class="material-symbols-outlined text-[18px]">filter_list</span>
+
+          <button id="btn-open-create-task" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#1e3e50] hover:bg-[#2c6673] text-white font-bold text-xs transition-all shadow-xs" type="button">
+            <span class="material-symbols-outlined text-[16px]">add</span>
+            <span>+ Buat Tugas</span>
           </button>
         </div>
       </div>
 
       <!-- ================================================================= -->
-      <!-- SECTION 3: 5 KANBAN COLUMNS (Matching Image 1)                    -->
+      <!-- SECTION 3: 5 KANBAN COLUMNS (DYNAMIC)                             -->
       <!-- ================================================================= -->
       <div id="view-kanban-board" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start ${taskViewMode === 'kanban' ? '' : 'hidden'}">
         
-        <!-- COLUMN 1: TO DO (Count: 3) -->
+        <!-- COLUMN 1: TO DO -->
         <div class="flex flex-col gap-3 p-3.5 rounded-2xl bg-[#dfeaf2] border border-[#cde0ec] min-h-[560px]">
           <div class="flex items-center justify-between px-1">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-[#7292a4]"></span>
               <span class="font-bold text-xs text-[#1e3e50] uppercase tracking-wider">To Do</span>
             </div>
-            <span class="px-2 py-0.5 rounded-full bg-white text-[#1e3e50] text-[11px] font-bold border border-[#cde0ec]">3</span>
+            <span class="px-2 py-0.5 rounded-full bg-white text-[#1e3e50] text-[11px] font-bold border border-[#cde0ec]">${colToDo.length}</span>
           </div>
 
-          ${colToDo.map(task => renderKanbanCard(task)).join('')}
+          ${colToDo.length > 0 ? colToDo.map(task => renderKanbanCard(task, allSubtasks, brands, users)).join('') : `
+            <div class="p-6 rounded-xl border border-dashed border-[#b6d0e0] text-center text-xs text-[#557b91] bg-white/40 my-auto">
+              Tidak ada tugas To Do
+            </div>
+          `}
 
-          <button onclick="window.app?.navigate('content')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
+          <button onclick="window.openCreateTaskModal('To Do')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
             <span class="material-symbols-outlined text-[16px]">add</span>
             <span>Tambah Item</span>
           </button>
         </div>
 
-        <!-- COLUMN 2: IN PROGRESS (Count: 2, Pulsing Indicator) -->
+        <!-- COLUMN 2: IN PROGRESS -->
         <div class="flex flex-col gap-3 p-3.5 rounded-2xl bg-[#dfeaf2] border border-[#cde0ec] min-h-[560px]">
           <div class="flex items-center justify-between px-1">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-[#2c6673] animate-pulse"></span>
               <span class="font-bold text-xs text-[#1e3e50] uppercase tracking-wider">In Progress</span>
             </div>
-            <span class="px-2 py-0.5 rounded-full bg-white text-[#1e3e50] text-[11px] font-bold border border-[#cde0ec]">2</span>
+            <span class="px-2 py-0.5 rounded-full bg-white text-[#1e3e50] text-[11px] font-bold border border-[#cde0ec]">${colInProgress.length}</span>
           </div>
 
-          ${colInProgress.map(task => renderKanbanCard(task)).join('')}
+          ${colInProgress.length > 0 ? colInProgress.map(task => renderKanbanCard(task, allSubtasks, brands, users)).join('') : `
+            <div class="p-6 rounded-xl border border-dashed border-[#b6d0e0] text-center text-xs text-[#557b91] bg-white/40 my-auto">
+              Tidak ada tugas In Progress
+            </div>
+          `}
 
-          <button onclick="window.app?.navigate('production')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
+          <button onclick="window.openCreateTaskModal('In Progress')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
             <span class="material-symbols-outlined text-[16px]">add</span>
             <span>Tambah Item</span>
           </button>
         </div>
 
-        <!-- COLUMN 3: EDITING & REVISI (Spotlighted Column with Navy Border Highlight) -->
+        <!-- COLUMN 3: EDITING & REVISI -->
         <div class="flex flex-col gap-3 p-3.5 rounded-2xl bg-[#dfeaf2] border-2 border-[#1e3e50]/40 min-h-[560px]">
           <div class="flex items-center justify-between px-1">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-[#1e3e50]"></span>
               <span class="font-bold text-xs text-[#1e3e50] uppercase tracking-wider">Editing &amp; Revisi</span>
             </div>
-            <span class="px-2 py-0.5 rounded-full bg-[#1e3e50] text-white text-[11px] font-bold">2</span>
+            <span class="px-2 py-0.5 rounded-full bg-[#1e3e50] text-white text-[11px] font-bold">${colEditing.length}</span>
           </div>
 
-          ${colEditing.map(task => renderKanbanCard(task)).join('')}
+          ${colEditing.length > 0 ? colEditing.map(task => renderKanbanCard(task, allSubtasks, brands, users, true)).join('') : `
+            <div class="p-6 rounded-xl border border-dashed border-[#b6d0e0] text-center text-xs text-[#557b91] bg-white/40 my-auto">
+              Tidak ada tugas Editing &amp; Revisi
+            </div>
+          `}
 
-          <button onclick="window.app?.navigate('production')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
+          <button onclick="window.openCreateTaskModal('Editing')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
             <span class="material-symbols-outlined text-[16px]">add</span>
             <span>Tambah Item</span>
           </button>
         </div>
 
-        <!-- COLUMN 4: REVIEW (Count: 1) -->
+        <!-- COLUMN 4: REVIEW -->
         <div class="flex flex-col gap-3 p-3.5 rounded-2xl bg-[#dfeaf2] border border-[#cde0ec] min-h-[560px]">
           <div class="flex items-center justify-between px-1">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-[#6e508a]"></span>
               <span class="font-bold text-xs text-[#1e3e50] uppercase tracking-wider">Review</span>
             </div>
-            <span class="px-2 py-0.5 rounded-full bg-white text-[#1e3e50] text-[11px] font-bold border border-[#cde0ec]">1</span>
+            <span class="px-2 py-0.5 rounded-full bg-white text-[#1e3e50] text-[11px] font-bold border border-[#cde0ec]">${colReview.length}</span>
           </div>
 
-          ${colReview.map(task => renderKanbanCard(task)).join('')}
+          ${colReview.length > 0 ? colReview.map(task => renderKanbanCard(task, allSubtasks, brands, users)).join('') : `
+            <div class="p-6 rounded-xl border border-dashed border-[#b6d0e0] text-center text-xs text-[#557b91] bg-white/40 my-auto">
+              Tidak ada tugas Review
+            </div>
+          `}
 
-          <button onclick="window.app?.navigate('tasks')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
+          <button onclick="window.openCreateTaskModal('Review')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
             <span class="material-symbols-outlined text-[16px]">add</span>
             <span>Tambah Item</span>
           </button>
         </div>
 
-        <!-- COLUMN 5: COMPLETED (Count: 20) -->
+        <!-- COLUMN 5: COMPLETED -->
         <div class="flex flex-col gap-3 p-3.5 rounded-2xl bg-[#dfeaf2] border border-[#cde0ec] min-h-[560px]">
           <div class="flex items-center justify-between px-1">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-[#21835e]"></span>
               <span class="font-bold text-xs text-[#1e3e50] uppercase tracking-wider">Completed</span>
             </div>
-            <span class="px-2 py-0.5 rounded-full bg-white text-[#1e3e50] text-[11px] font-bold border border-[#cde0ec]">20</span>
+            <span class="px-2 py-0.5 rounded-full bg-white text-[#1e3e50] text-[11px] font-bold border border-[#cde0ec]">${colCompleted.length}</span>
           </div>
 
-          ${colCompleted.map(task => renderKanbanCard(task)).join('')}
+          ${colCompleted.length > 0 ? colCompleted.map(task => renderKanbanCard(task, allSubtasks, brands, users)).join('') : `
+            <div class="p-6 rounded-xl border border-dashed border-[#b6d0e0] text-center text-xs text-[#557b91] bg-white/40 my-auto">
+              Tidak ada tugas Completed
+            </div>
+          `}
 
-          <button onclick="window.app?.navigate('tasks')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
+          <button onclick="window.openCreateTaskModal('Completed')" class="w-full py-2.5 rounded-xl border border-dashed border-[#b6d0e0] text-[#557b91] hover:text-[#1e3e50] hover:bg-white/60 text-xs font-semibold flex items-center justify-center gap-1 transition-colors mt-auto" type="button">
             <span class="material-symbols-outlined text-[16px]">add</span>
             <span>Tambah Item</span>
           </button>
@@ -3751,7 +3729,7 @@ function renderTasks(container) {
       <div id="view-table-detail" class="bg-white rounded-2xl border border-[#d2e2ec] shadow-sm overflow-hidden ${taskViewMode === 'table' ? '' : 'hidden'}">
         <div class="p-4 border-b border-[#eaf2f7] flex items-center justify-between">
           <h3 class="font-bold text-sm text-[#1e3e50]">Daftar Seluruh Pekerjaan Studio</h3>
-          <span class="text-xs text-[#5c7786] font-medium">${allTasks.length} Tugas Tersimpan di Google Sheets</span>
+          <span class="text-xs text-[#5c7786] font-medium">${filteredTasks.length} Tugas Ditemukan</span>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs text-[#143242]">
@@ -3761,39 +3739,151 @@ function renderTasks(container) {
                 <th class="p-3.5">Brand Mitra</th>
                 <th class="p-3.5">Penanggung Jawab</th>
                 <th class="p-3.5">Prioritas</th>
-                <th class="p-3.5">Progres Subtask</th>
+                <th class="p-3.5">Progres</th>
                 <th class="p-3.5">Deadline</th>
                 <th class="p-3.5">Status</th>
+                <th class="p-3.5 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-[#edf3f7]">
-              ${allTasks.map(t => `
-                <tr class="hover:bg-[#f8fbfe] transition">
-                  <td class="p-3.5 font-bold">
-                    <span class="font-mono text-[10px] text-[#2c6673] bg-[#eaf2f7] px-1.5 py-0.5 rounded mr-1.5">${t.task_id}</span>
-                    <span>${t.task_title}</span>
-                  </td>
-                  <td class="p-3.5 text-[#5c7786]">${t.brand_name || t.brand_id || 'Umum'}</td>
-                  <td class="p-3.5 font-medium">${t.assigned_user || 'Rian Pratama'}</td>
-                  <td class="p-3.5">
-                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${t.priority === 'Urgent' ? 'bg-[#fde8e8] text-[#c53030]' : t.priority === 'High' ? 'bg-[#fdf2e9] text-[#c05621]' : 'bg-[#eaf4fa] text-[#2c6673]'}">
-                      ${t.priority || 'Normal'}
-                    </span>
-                  </td>
-                  <td class="p-3.5">
-                    <div class="flex items-center gap-2">
-                      <div class="w-20 bg-[#e6eff5] rounded-full h-1.5 overflow-hidden">
-                        <div class="bg-[#2c6673] h-full" style="width: ${t.progress || 50}%;"></div>
+              ${filteredTasks.length > 0 ? filteredTasks.map(t => {
+                const authorUser = users.find(u => u.user_id === t.assigned_user || u.name === t.assigned_user);
+                const brandItem = brands.find(b => b.brand_id === t.brand_id);
+                return `
+                  <tr class="hover:bg-[#f8fbfe] transition">
+                    <td class="p-3.5 font-bold">
+                      <span class="font-mono text-[10px] text-[#2c6673] bg-[#eaf2f7] px-1.5 py-0.5 rounded mr-1.5">#${t.task_id}</span>
+                      <span>${t.task_title}</span>
+                    </td>
+                    <td class="p-3.5 text-[#5c7786]">${t.brand_name || brandItem?.brand_name || 'Self-Project'}</td>
+                    <td class="p-3.5 font-medium">${authorUser?.name || t.assigned_user || 'Rian Pratama'}</td>
+                    <td class="p-3.5">
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${t.priority === 'Urgent' ? 'bg-[#fde8e8] text-[#c53030]' : t.priority === 'High' ? 'bg-[#fdf2e9] text-[#c05621]' : 'bg-[#eaf4fa] text-[#2c6673]'}">
+                        ${t.priority || 'Normal'}
+                      </span>
+                    </td>
+                    <td class="p-3.5">
+                      <div class="flex items-center gap-2">
+                        <div class="w-16 bg-[#e6eff5] rounded-full h-1.5 overflow-hidden">
+                          <div class="bg-[#2c6673] h-full" style="width: ${t.progress || 0}%;"></div>
+                        </div>
+                        <span class="text-[11px] font-semibold text-[#1e3e50]">${t.progress || 0}%</span>
                       </div>
-                      <span class="text-[11px] font-semibold text-[#1e3e50]">${t.progress || 50}%</span>
-                    </div>
+                    </td>
+                    <td class="p-3.5 text-[#5c7786]">${t.deadline || 'Hari ini'}</td>
+                    <td class="p-3.5">
+                      <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-[#edf4f8] text-[#1e3e50]">${t.status || 'To Do'}</span>
+                    </td>
+                    <td class="p-3.5 text-center">
+                      <div class="flex items-center justify-center gap-1.5">
+                        <button onclick="window.openEditTaskModal('${t.task_id}')" class="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition" title="Edit Tugas">
+                          <span class="material-symbols-outlined text-[16px]">edit</span>
+                        </button>
+                        <button onclick="window.confirmDeleteTask('${t.task_id}')" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas">
+                          <span class="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('') : `
+                <tr>
+                  <td colspan="8" class="p-8 text-center text-xs text-slate-400">
+                    Belum ada tugas pekerjaan yang tersimpan. Klik <strong>+ Buat Tugas</strong> untuk menambahkan pekerjaan baru.
                   </td>
-                  <td class="p-3.5 text-[#5c7786]">${t.deadline || 'Besok'}</td>
-                  <td class="p-3.5 font-bold text-[#1e3e50]">${t.status}</td>
                 </tr>
-              `).join('')}
+              `}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- MODAL: BUAT / EDIT TUGAS (POPUP)                                  -->
+      <!-- ================================================================= -->
+      <div id="modal-task-manage" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-[#d2e2ec] shadow-2xl space-y-5 my-8">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-[#e3f4f8] text-[#1b6274] flex items-center justify-center font-bold">
+                <span class="material-symbols-outlined text-[20px]">assignment</span>
+              </div>
+              <h3 id="modal-task-title-text" class="text-sm font-extrabold text-[#143242]">Buat Tugas Baru</h3>
+            </div>
+            <button onclick="document.getElementById('modal-task-manage').classList.add('hidden')" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition">
+              <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+
+          <form id="form-task-manage" class="space-y-4 text-xs">
+            <input type="hidden" id="task-form-id" value="">
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Judul Tugas Pekerjaan <span class="text-rose-500">*</span></label>
+              <input type="text" id="task-form-title" required placeholder="Contoh: Shooting Video Unboxing Review" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-medium">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Brand / Klien</label>
+                <select id="task-form-brand" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-medium">
+                  <option value="">Self-Project</option>
+                  ${brands.map(b => `<option value="${b.brand_name}">${b.brand_name}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Penanggung Jawab (PIC)</label>
+                <select id="task-form-pic" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-medium">
+                  ${users.map(u => `<option value="${u.name}">${u.name} (${u.role})</option>`).join('')}
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Prioritas</label>
+                <select id="task-form-priority" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-medium">
+                  <option value="Normal">Normal</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Status Kolom</label>
+                <select id="task-form-status" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-medium">
+                  <option value="To Do">To Do</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Editing">Editing &amp; Revisi</option>
+                  <option value="Review">Review</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Deadline</label>
+                <input type="text" id="task-form-deadline" placeholder="Besok / 20 Nov" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-medium">
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Catatan / Deskripsi Singkat</label>
+              <textarea id="task-form-desc" rows="2" placeholder="Catatan detail pekerjaan..." class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-medium"></textarea>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button type="button" id="btn-task-delete-in-modal" class="hidden px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition">
+                Hapus Tugas Ini
+              </button>
+              <div class="flex items-center gap-2 ml-auto">
+                <button type="button" onclick="document.getElementById('modal-task-manage').classList.add('hidden')" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition">
+                  Batal
+                </button>
+                <button type="submit" class="px-5 py-2 rounded-xl bg-[#1e3e50] hover:bg-[#2c6673] text-white font-bold text-xs shadow-xs transition">
+                  Simpan Tugas
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       </div>
 
@@ -3803,46 +3893,76 @@ function renderTasks(container) {
   setupTaskListeners(container);
 }
 
-function renderKanbanCard(task) {
-  const isSpotlight = task.isSpotlight;
+function renderKanbanCard(task, allSubtasks, brands, users, isSpotlight = false) {
+  const brandName = task.brand_name || (brands.find(b => b.brand_id === task.brand_id)?.brand_name) || "Self-Project";
+  const authorUser = users.find(u => u.user_id === task.assigned_user || u.name === task.assigned_user) || {
+    name: task.assigned_user || "Rian Pratama",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
+  };
+
+  const priorityClass = task.priority === "Urgent" ? "bg-[#fde8e8] text-[#c53030]" :
+    task.priority === "High" ? "bg-[#fdf2e9] text-[#c05621]" :
+    task.priority === "Low" ? "bg-slate-100 text-slate-600" :
+    "bg-[#eaf4fa] text-[#2c6673]";
+
+  const subtasks = allSubtasks.filter(s => s.task_id === task.task_id);
+  const subDone = subtasks.filter(s => s.status === "Completed" || s.is_done).length;
+  const subTotal = subtasks.length;
+  const progress = subTotal > 0 ? Math.round((subDone / subTotal) * 100) : (task.progress || 0);
+
   return `
-    <div class="cursor-pointer group p-3.5 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col gap-2.5 border ${isSpotlight ? 'border-l-4 border-l-[#1e3e50] border-y border-r border-[#cbdfe9] shadow-md' : 'border-[#d4e4ee]'}" onclick="alert('Rincian Tugas #${task.id}: ${task.title}')">
+    <div class="cursor-pointer group p-3.5 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col gap-2.5 border ${isSpotlight ? 'border-l-4 border-l-[#1e3e50] border-y border-r border-[#cbdfe9] shadow-md' : 'border-[#d4e4ee]'}" onclick="window.openEditTaskModal('${task.task_id}')">
       <div class="flex items-center justify-between">
-        <span class="font-mono text-[11px] font-semibold ${isSpotlight ? 'text-white bg-[#1e3e50] font-bold' : 'text-[#1e3e50] bg-[#eaf2f7]'} px-2 py-0.5 rounded-md border border-[#cde0ec]">#${task.id}</span>
-        <div class="flex items-center gap-1">
-          <span class="px-2 py-0.5 rounded-full ${task.priorityClass} font-semibold text-[10px]">${task.priority}</span>
-          ${task.version ? `<span class="px-1.5 py-0.5 rounded-md bg-[#edf4f8] text-[#476c80] font-mono text-[10px]">${task.version}</span>` : ''}
+        <span class="font-mono text-[11px] font-semibold ${isSpotlight ? 'text-white bg-[#1e3e50] font-bold' : 'text-[#1e3e50] bg-[#eaf2f7]'} px-2 py-0.5 rounded-md border border-[#cde0ec]">#${task.task_id}</span>
+        
+        <div class="flex items-center gap-1.5">
+          <span class="px-2 py-0.5 rounded-full ${priorityClass} font-semibold text-[10px]">${task.priority || 'Normal'}</span>
+          <button type="button" onclick="event.stopPropagation(); window.confirmDeleteTask('${task.task_id}')" class="p-1 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas Ini">
+            <span class="material-symbols-outlined text-[15px]">delete</span>
+          </button>
         </div>
       </div>
 
       <h3 class="font-bold text-sm text-[#1e3e50] group-hover:text-[#2c6673] transition-colors line-clamp-2 leading-snug">
-        ${task.title}
+        ${task.task_title || task.title}
       </h3>
 
       <div class="flex items-center gap-1.5 text-xs text-[#5f8296]">
         <span class="material-symbols-outlined text-[14px]">loyalty</span>
-        <span class="truncate ${isSpotlight ? 'font-medium text-[#1e3e50]' : ''}">${task.brand}</span>
+        <span class="truncate ${isSpotlight ? 'font-medium text-[#1e3e50]' : ''}">${brandName}</span>
       </div>
 
       <div class="flex flex-col gap-1 mt-0.5">
         <div class="flex items-center justify-between text-[11px]">
           <span class="text-[#64889c]">Subtask Progress</span>
-          <span class="font-bold text-[#1e3e50]">${task.subDone}/${task.subTotal} (${task.progress}%)</span>
+          <span class="font-bold text-[#1e3e50]">${subTotal > 0 ? `${subDone}/${subTotal} (${progress}%)` : `${progress}%`}</span>
         </div>
         <div class="w-full bg-[#e6eff5] rounded-full h-1.5 overflow-hidden">
-          <div class="bg-[#2c6673] h-full rounded-full" style="width: ${task.progress}%;"></div>
+          <div class="bg-[#2c6673] h-full rounded-full" style="width: ${progress}%;"></div>
         </div>
       </div>
 
       <div class="flex items-center justify-between text-[#5f8296] pt-1.5 border-t border-[#edf4f8]">
         <div class="flex items-center gap-1.5">
-          <img class="w-5 h-5 rounded-full object-cover ring-1 ring-[#c0d8e6]" src="${task.avatar}">
-          <span class="text-[11px] font-medium text-[#1e3e50]">${task.author}</span>
+          <img class="w-5 h-5 rounded-full object-cover ring-1 ring-[#c0d8e6]" src="${authorUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}">
+          <span class="text-[11px] font-medium text-[#1e3e50]">${authorUser.name || 'Studio Member'}</span>
         </div>
-        <span class="text-[11px] flex items-center gap-1 ${task.deadlineClass}">
+        <span class="text-[11px] flex items-center gap-1 ${task.priority === 'Urgent' ? 'text-[#c53030] font-semibold' : 'text-[#698d9f]'}">
           <span class="material-symbols-outlined text-[13px]">schedule</span>
-          <span>${task.deadline}</span>
+          <span>${task.deadline || 'Hari ini'}</span>
         </span>
+      </div>
+
+      <!-- Quick Move Status -->
+      <div class="pt-2 border-t border-[#edf4f8] flex items-center justify-between" onclick="event.stopPropagation()">
+        <span class="text-[10px] text-slate-400 font-semibold">Pindah Kolom:</span>
+        <select onchange="window.changeTaskStatus('${task.task_id}', this.value)" class="text-[10.5px] bg-[#f0f6fa] border border-[#cbdfe9] rounded-lg px-2 py-0.5 font-bold text-[#1e3e50] outline-none">
+          <option value="To Do" ${(!task.status || task.status === 'To Do' || task.status === 'Idea' || task.status === 'Planned') ? 'selected' : ''}>To Do</option>
+          <option value="In Progress" ${(task.status === 'In Progress' || task.status === 'Shooting') ? 'selected' : ''}>In Progress</option>
+          <option value="Editing" ${(task.status === 'Editing' || task.status === 'Revision') ? 'selected' : ''}>Editing & Revisi</option>
+          <option value="Review" ${task.status === 'Review' ? 'selected' : ''}>Review</option>
+          <option value="Completed" ${(task.status === 'Completed' || task.status === 'Published') ? 'selected' : ''}>Completed</option>
+        </select>
       </div>
     </div>
   `;
@@ -3865,6 +3985,121 @@ function setupTaskListeners(container) {
     selectedBrandFilter = e.target.value;
     renderTasks(container);
   });
+
+  document.getElementById("btn-open-create-task")?.addEventListener("click", () => {
+    window.openCreateTaskModal();
+  });
+
+  // Modal Form Submit
+  document.getElementById("form-task-manage")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const taskId = document.getElementById("task-form-id")?.value;
+    const title = document.getElementById("task-form-title")?.value?.trim();
+    const brandName = document.getElementById("task-form-brand")?.value;
+    const assignedUser = document.getElementById("task-form-pic")?.value;
+    const priority = document.getElementById("task-form-priority")?.value;
+    const status = document.getElementById("task-form-status")?.value;
+    const deadline = document.getElementById("task-form-deadline")?.value?.trim();
+    const description = document.getElementById("task-form-desc")?.value?.trim();
+
+    if (!title) return;
+
+    if (taskId) {
+      // Edit existing
+      store.updateItem(SHEET_NAMES.CONTENT_TASKS, taskId, {
+        task_title: title,
+        brand_name: brandName,
+        assigned_user: assignedUser,
+        priority: priority,
+        status: status,
+        deadline: deadline || "Hari ini",
+        description: description
+      });
+      if (window.showToast) window.showToast("✅ Tugas berhasil diperbarui!", "success");
+    } else {
+      // Create new
+      store.createItem(SHEET_NAMES.CONTENT_TASKS, {
+        task_title: title,
+        brand_name: brandName,
+        assigned_user: assignedUser,
+        priority: priority,
+        status: status,
+        deadline: deadline || "Hari ini",
+        description: description,
+        progress: status === "Completed" ? 100 : 0
+      });
+      if (window.showToast) window.showToast("✅ Tugas baru berhasil ditambahkan!", "success");
+    }
+
+    document.getElementById("modal-task-manage")?.classList.add("hidden");
+    renderTasks(container);
+  });
+
+  // Delete in Modal Button
+  document.getElementById("btn-task-delete-in-modal")?.addEventListener("click", () => {
+    const taskId = document.getElementById("task-form-id")?.value;
+    if (taskId) {
+      window.confirmDeleteTask(taskId);
+      document.getElementById("modal-task-manage")?.classList.add("hidden");
+    }
+  });
+
+  // Global window functions
+  window.openCreateTaskModal = (initialStatus = "To Do") => {
+    document.getElementById("task-form-id").value = "";
+    document.getElementById("task-form-title").value = "";
+    document.getElementById("task-form-status").value = initialStatus;
+    document.getElementById("task-form-priority").value = "Normal";
+    document.getElementById("task-form-deadline").value = "";
+    document.getElementById("task-form-desc").value = "";
+    document.getElementById("modal-task-title-text").textContent = "Buat Tugas Baru";
+    document.getElementById("btn-task-delete-in-modal")?.classList.add("hidden");
+    document.getElementById("modal-task-manage")?.classList.remove("hidden");
+  };
+
+  window.openEditTaskModal = (taskId) => {
+    const allTasks = store.getItems(SHEET_NAMES.CONTENT_TASKS) || [];
+    const task = allTasks.find(t => t.task_id === taskId);
+    if (!task) return;
+
+    document.getElementById("task-form-id").value = task.task_id;
+    document.getElementById("task-form-title").value = task.task_title || task.title || "";
+    document.getElementById("task-form-brand").value = task.brand_name || "";
+    document.getElementById("task-form-pic").value = task.assigned_user || "";
+    document.getElementById("task-form-status").value = task.status || "To Do";
+    document.getElementById("task-form-priority").value = task.priority || "Normal";
+    document.getElementById("task-form-deadline").value = task.deadline || "";
+    document.getElementById("task-form-desc").value = task.description || "";
+    document.getElementById("modal-task-title-text").textContent = `Edit Tugas #${task.task_id}`;
+    document.getElementById("btn-task-delete-in-modal")?.classList.remove("hidden");
+    document.getElementById("modal-task-manage")?.classList.remove("hidden");
+  };
+
+  window.confirmDeleteTask = (taskId) => {
+    if (confirm(`Apakah Anda yakin ingin menghapus tugas #${taskId}? Tindakan ini akan menghapusnya dari papan kerja dan database.`)) {
+      store.deleteItem(SHEET_NAMES.CONTENT_TASKS, taskId);
+      if (window.showToast) window.showToast(`🗑️ Tugas #${taskId} berhasil dihapus.`, "info");
+      renderTasks(container);
+    }
+  };
+
+  window.changeTaskStatus = (taskId, newStatus) => {
+    const progress = newStatus === "Completed" ? 100 : newStatus === "Review" ? 80 : newStatus === "Editing" ? 60 : newStatus === "In Progress" ? 40 : 0;
+    store.updateItem(SHEET_NAMES.CONTENT_TASKS, taskId, {
+      status: newStatus,
+      progress: progress
+    });
+    if (window.showToast) window.showToast(`Tugas #${taskId} dipindahkan ke ${newStatus}`, "info");
+    renderTasks(container);
+  };
+
+  window.confirmClearAllTasks = () => {
+    if (confirm("⚠️ PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SEMUA TUGAS pekerjaan?\n\nPapan tugas akan dikosongkan secara bersih sehingga Anda dapat mulai menginput pekerjaan asli studio Anda.")) {
+      store.clearAllTasks();
+      if (window.showToast) window.showToast("🧹 Seluruh data tugas pekerjaan berhasil dikosongkan!", "success");
+      renderTasks(container);
+    }
+  };
 }
 
 return { renderTasks: renderTasks };
@@ -9002,6 +9237,27 @@ function renderProfileTab(currentUser, users) {
 function renderDataTab() {
   return `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Clean Slate: Kosongkan Data Pekerjaan Demo -->
+      <div class="bg-white p-6 rounded-2xl border border-amber-200 bg-amber-50/20 shadow-sm space-y-4">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🧹</span>
+          <div>
+            <h3 class="font-extrabold text-sm text-[#8c5310]">Kosongkan Data Pekerjaan Demo (Clean Slate)</h3>
+            <p class="text-xs text-slate-500">Mulai dari nol: bersihkan seluruh tugas, ide, naskah, dan kalender demo</p>
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Tindakan ini akan mengosongkan seluruh data operasional kerja (Papan Tugas Kanban, Subtask, Ide Konten, Naskah Script, Shooting Log, Revisi Video, Kalender, dan Stopwatch). 
+          <strong>Akun Pengguna Tim, Profil, Brand, dan Pengaturan Sistem Anda akan tetap aman.</strong>
+        </p>
+
+        <button id="btn-clear-work-data" class="py-2.5 px-4 rounded-xl bg-[#c05621] hover:bg-[#9c4217] text-white font-bold text-xs transition shadow-xs flex items-center gap-2">
+          <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+          <span>Kosongkan Semua Data Pekerjaan Demo</span>
+        </button>
+      </div>
+
       <!-- JSON Backup & Restore -->
       <div class="bg-white p-6 rounded-2xl border border-[#d2e2ec] shadow-sm space-y-4">
         <div class="flex items-center gap-2">
@@ -9025,17 +9281,17 @@ function renderDataTab() {
       </div>
 
       <!-- Danger Zone -->
-      <div class="bg-white p-6 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-sm space-y-4">
+      <div class="bg-white p-6 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-sm space-y-4 md:col-span-2">
         <div class="flex items-center gap-2">
           <span class="text-2xl">⚠️</span>
           <div>
-            <h3 class="font-extrabold text-sm text-rose-900">Danger Zone: Reset Database</h3>
+            <h3 class="font-extrabold text-sm text-rose-900">Danger Zone: Reset Database ke Default</h3>
             <p class="text-xs text-rose-600">Kembalikan seluruh database ke data awal standar pabrik</p>
           </div>
         </div>
 
         <p class="text-xs text-slate-600 leading-relaxed">
-          Tindakan ini akan mengosongkan perubahan lokal di browser Anda dan mengembalikan 25 sheet ke starter dataset resmi.
+          Tindakan ini akan mengosongkan perubahan lokal di browser Anda dan mengembalikan seluruh 25 sheet ke dataset contoh pabrik.
         </p>
 
         <button id="btn-reset-database" class="py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition shadow-xs">
@@ -9526,6 +9782,17 @@ function setupSettingsListeners(container) {
       }
     };
     reader.readAsText(file);
+  });
+
+  // Clean Slate: Kosongkan Data Pekerjaan Demo
+  document.getElementById("btn-clear-work-data")?.addEventListener("click", () => {
+    if (confirm("⚠️ PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SEMUA data pekerjaan demo?\n\nPapan tugas, ide konten, naskah script, kalender, dan waktu kerja akan dikosongkan secara bersih sehingga Anda dapat mulai mengisi pekerjaan nyata tim Anda.\n\nAkun pengguna tim, profil, brand mitra, dan pengaturan sistem Anda akan tetap aman.")) {
+      store.clearWorkData();
+      if (window.showToast) {
+        window.showToast("🧹 Seluruh data pekerjaan demo berhasil dikosongkan!", "success");
+      }
+      renderSettings(container);
+    }
   });
 
   // Reset Database
