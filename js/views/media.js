@@ -7,6 +7,7 @@
  */
 
 import { store } from "../store.js";
+import { auth } from "../auth.js";
 import { api } from "../api.js";
 import { SHEET_NAMES, SOCIAL_PLATFORMS } from "../config.js";
 
@@ -153,9 +154,16 @@ function renderMediaGrid(items) {
                   </a>
                 ` : `<span class="text-slate-400 text-[10px]">Tersimpan Lokal</span>`}
 
-                <button class="font-bold text-slate-400 hover:text-rose-600 text-xs" onclick="window.deleteMediaItem('${m.media_id}')">
-                  Hapus
-                </button>
+                <div class="flex items-center gap-2">
+                  <button class="font-bold text-blue-600 hover:text-blue-800 text-xs" onclick="window.openEditMediaModal('${m.media_id}')">
+                    Edit
+                  </button>
+                  ${auth.isAdminOrOwner() ? `
+                    <button class="font-bold text-slate-400 hover:text-rose-600 text-xs" onclick="window.deleteMediaItem('${m.media_id}')">
+                      Hapus
+                    </button>
+                  ` : ''}
+                </div>
               </div>
             </div>
           </div>
@@ -216,9 +224,14 @@ function renderReferencesGrid(refs) {
                 <button class="text-xs font-bold text-emerald-600 hover:text-emerald-800" onclick="window.convertRefToIdea('${r.reference_id}')" title="Buat ide konten dari referensi ini">
                   ⚡ Jadi Ide
                 </button>
-                <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteReference('${r.reference_id}')">
-                  Hapus
+                <button class="text-xs font-bold text-blue-600 hover:text-blue-800" onclick="window.openEditReferenceModal('${r.reference_id}')">
+                  Edit
                 </button>
+                ${auth.isAdminOrOwner() ? `
+                  <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteReference('${r.reference_id}')">
+                    Hapus
+                  </button>
+                ` : ''}
               </div>
             </div>
           </div>
@@ -274,16 +287,38 @@ function setupMediaListeners(container, brands, contents) {
   });
 
   // Global functions
+  window.openEditMediaModal = (mediaId) => {
+    const m = store.getItemById(SHEET_NAMES.MEDIA_LIBRARY, mediaId);
+    if (m) openUploadMediaModal(brands, contents, m);
+  };
+
+  window.openEditReferenceModal = (refId) => {
+    const r = store.getItemById(SHEET_NAMES.REFERENCES, refId);
+    if (r) openReferenceModal(r, contents);
+  };
+
   window.deleteMediaItem = (mediaId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus berkas media.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus berkas media.");
+      return;
+    }
     if (confirm("Hapus berkas media ini dari daftar perpustakaan?")) {
       store.deleteItem(SHEET_NAMES.MEDIA_LIBRARY, mediaId);
+      if (window.showToast) window.showToast("🗑️ Berkas media berhasil dihapus.", "info");
       renderMedia(container);
     }
   };
 
   window.deleteReference = (refId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan riset referensi.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan riset referensi.");
+      return;
+    }
     if (confirm("Hapus catatan referensi inspirasi ini?")) {
       store.deleteItem(SHEET_NAMES.REFERENCES, refId);
+      if (window.showToast) window.showToast("🗑️ Inspirasi referensi berhasil dihapus.", "info");
       renderMedia(container);
     }
   };
@@ -307,44 +342,57 @@ function setupMediaListeners(container, brands, contents) {
   };
 }
 
-function openUploadMediaModal(brands = [], contents = []) {
+function openUploadMediaModal(brands = [], contents = [], item = null) {
   const modalContainer = document.getElementById("global-modal-container");
   if (!modalContainer) return;
+
+  const isEdit = !!item;
+  const data = item || {
+    file_name: "",
+    category: "Raw Footage",
+    brand_id: "",
+    file_url: "",
+    notes: ""
+  };
 
   modalContainer.innerHTML = `
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop">
       <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
         <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div>
-            <h3 class="font-extrabold text-slate-900 text-sm">Upload Berkas / Catat Media Drive</h3>
-            <p class="text-xs text-slate-500">Unggah berkas langsung ke Google Drive atau simpan tautan aset</p>
+            <h3 class="font-extrabold text-slate-900 text-sm">
+              ${isEdit ? 'Edit Informasi Media' : 'Upload Berkas / Catat Media Drive'}
+            </h3>
+            <p class="text-xs text-slate-500">${isEdit ? 'Perbarui detail nama, kategori, atau tautan berkas' : 'Unggah berkas langsung ke Google Drive atau simpan tautan aset'}</p>
           </div>
           <button id="modal-upload-close" class="p-1 rounded text-slate-400 hover:text-slate-700">✕</button>
         </div>
 
         <form id="upload-media-form" class="p-6 space-y-4 text-xs">
-          <!-- File Picker -->
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Pilih File dari Perangkat (Opsional)</label>
-            <input type="file" id="form-media-file" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50">
-            <p class="text-[10px] text-slate-400 mt-1">File akan dienkode Base64 dan disimpan ke Google Drive.</p>
-          </div>
+          ${!isEdit ? `
+            <!-- File Picker -->
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Pilih File dari Perangkat (Opsional)</label>
+              <input type="file" id="form-media-file" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50">
+              <p class="text-[10px] text-slate-400 mt-1">File akan dienkode Base64 dan disimpan ke Google Drive.</p>
+            </div>
+          ` : ''}
 
           <!-- File Name -->
           <div>
             <label class="block font-bold text-slate-700 mb-1">Nama Berkas <span class="text-rose-500">*</span></label>
-            <input type="text" id="form-media-name" required placeholder="Contoh: B-Roll_Botol_Serum_Slowmo_4K.mp4" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none">
+            <input type="text" id="form-media-name" required value="${data.file_name}" placeholder="Contoh: B-Roll_Botol_Serum_Slowmo_4K.mp4" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none">
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Kategori Berkas</label>
               <select id="form-media-cat" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
-                <option value="Raw Footage">Raw Footage</option>
-                <option value="Brand Asset">Brand Asset / Logo</option>
-                <option value="Music & SFX">Music & SFX</option>
-                <option value="Final Video">Final Video</option>
-                <option value="General">General</option>
+                <option value="Raw Footage" ${data.category === 'Raw Footage' ? 'selected' : ''}>Raw Footage</option>
+                <option value="Brand Asset" ${data.category === 'Brand Asset' ? 'selected' : ''}>Brand Asset / Logo</option>
+                <option value="Music & SFX" ${data.category === 'Music & SFX' ? 'selected' : ''}>Music & SFX</option>
+                <option value="Final Video" ${data.category === 'Final Video' ? 'selected' : ''}>Final Video</option>
+                <option value="General" ${data.category === 'General' ? 'selected' : ''}>General</option>
               </select>
             </div>
 
@@ -352,28 +400,35 @@ function openUploadMediaModal(brands = [], contents = []) {
               <label class="block font-bold text-slate-700 mb-1">Terkait Brand</label>
               <select id="form-media-brand" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
                 <option value="">-- Tanpa Brand --</option>
-                ${brands.map(b => `<option value="${b.brand_id}">${b.brand_name}</option>`).join('')}
+                ${brands.map(b => `<option value="${b.brand_id}" ${data.brand_id === b.brand_id ? 'selected' : ''}>${b.brand_name}</option>`).join('')}
               </select>
             </div>
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Tautan Google Drive (Jika sudah ada)</label>
-            <input type="url" id="form-media-url" placeholder="https://drive.google.com/file/d/..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
+            <label class="block font-bold text-slate-700 mb-1">Tautan Google Drive / Cloud URL</label>
+            <input type="url" id="form-media-url" value="${data.file_url || ''}" placeholder="https://drive.google.com/file/d/..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
 
           <div>
             <label class="block font-bold text-slate-700 mb-1">Catatan Tambahan</label>
-            <input type="text" id="form-media-notes" placeholder="Resolusi 4K, 60fps, pencahayaan studio" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
+            <input type="text" id="form-media-notes" value="${data.notes || ''}" placeholder="Resolusi 4K, 60fps, pencahayaan studio" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-upload-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" id="btn-submit-upload" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Berkas
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-upload-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Media</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-upload-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" id="btn-submit-upload" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                ${isEdit ? 'Simpan Perubahan' : 'Simpan Berkas'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -383,6 +438,17 @@ function openUploadMediaModal(brands = [], contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-upload-close")?.addEventListener("click", close);
   document.getElementById("modal-upload-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-upload-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus berkas media ini dari daftar perpustakaan?")) {
+      store.deleteItem(SHEET_NAMES.MEDIA_LIBRARY, item.media_id);
+      if (window.showToast) window.showToast("🗑️ Berkas media berhasil dihapus.", "info");
+      close();
+      const main = document.getElementById("main-view-container");
+      if (main) renderMedia(main);
+    }
+  });
 
   // Auto-fill file name when file is selected
   document.getElementById("form-media-file")?.addEventListener("change", (e) => {
@@ -396,7 +462,7 @@ function openUploadMediaModal(brands = [], contents = []) {
     e.preventDefault();
     const submitBtn = document.getElementById("btn-submit-upload");
     submitBtn.disabled = true;
-    submitBtn.innerText = "Mengunggah...";
+    submitBtn.innerText = isEdit ? "Menyimpan..." : "Mengunggah...";
 
     const fileInput = document.getElementById("form-media-file");
     const fileName = document.getElementById("form-media-name").value.trim();
@@ -405,12 +471,26 @@ function openUploadMediaModal(brands = [], contents = []) {
     const manualUrl = document.getElementById("form-media-url").value.trim();
     const notes = document.getElementById("form-media-notes").value.trim();
 
-    if (fileInput.files.length > 0) {
+    if (isEdit) {
+      store.updateItem(SHEET_NAMES.MEDIA_LIBRARY, item.media_id, {
+        file_name: fileName,
+        file_type: fileName.split(".").pop().toUpperCase(),
+        category: category,
+        brand_id: brandId,
+        file_url: manualUrl,
+        notes: notes
+      });
+      if (window.showToast) window.showToast("✅ Berkas media berhasil diperbarui!", "success");
+      close();
+      const main = document.getElementById("main-view-container");
+      if (main) renderMedia(main);
+    } else if (fileInput && fileInput.files && fileInput.files.length > 0) {
       const file = fileInput.files[0];
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = reader.result;
         await api.uploadMedia(base64, fileName, file.type, category, brandId, "", notes);
+        if (window.showToast) window.showToast("✅ Berkas media berhasil diunggah!", "success");
         close();
         const main = document.getElementById("main-view-container");
         if (main) renderMedia(main);
@@ -428,6 +508,7 @@ function openUploadMediaModal(brands = [], contents = []) {
         upload_date: new Date().toISOString().slice(0, 10),
         notes: notes
       });
+      if (window.showToast) window.showToast("✅ Berkas media berhasil dicatat!", "success");
       close();
       const main = document.getElementById("main-view-container");
       if (main) renderMedia(main);
@@ -503,13 +584,20 @@ function openReferenceModal(ref = null, contents = []) {
             <input type="text" id="form-ref-notes" value="${data.notes || ''}" placeholder="Sound trending, timing transisi 0.3 detik..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-ref-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Referensi
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-ref-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Referensi</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-ref-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                Simpan Referensi
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -519,6 +607,17 @@ function openReferenceModal(ref = null, contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-ref-close")?.addEventListener("click", close);
   document.getElementById("modal-ref-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-ref-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus catatan referensi inspirasi ini?")) {
+      store.deleteItem(SHEET_NAMES.REFERENCES, ref.reference_id);
+      if (window.showToast) window.showToast("🗑️ Inspirasi referensi berhasil dihapus.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderMedia(mainContainer);
+    }
+  });
 
   document.getElementById("ref-form")?.addEventListener("submit", (e) => {
     e.preventDefault();

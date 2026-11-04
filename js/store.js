@@ -561,17 +561,25 @@ class Store {
 
   getItemById(sheetName, id) {
     const list = this.getItems(sheetName);
-    return list.find(item => this.getPrimaryId(item) === id) || null;
+    const target = String(id);
+    return list.find(item => this.getPrimaryId(item, sheetName) === target) || null;
   }
 
-  getPrimaryId(item) {
+  getPrimaryId(item, sheetName = null) {
     if (!item) return "";
-    return item.id || item.user_id || item.brand_id || item.client_id || item.project_id ||
-           item.campaign_id || item.account_id || item.content_id || item.task_id ||
+    if (sheetName) {
+      const pk = this.getPrimaryIdKey(sheetName);
+      if (item[pk] !== undefined && item[pk] !== null && item[pk] !== "") {
+        return String(item[pk]);
+      }
+    }
+    return String(item.id || item.user_id || item.content_id || item.task_id ||
            item.subtask_id || item.calendar_id || item.script_id || item.production_id ||
            item.revision_id || item.publication_id || item.analytics_id || item.media_id ||
            item.reference_id || item.time_id || item.income_id || item.expense_id ||
-           item.invoice_id || item.payment_id || item.target_id || item.notification_id || item.key;
+           item.invoice_id || item.payment_id || item.target_id || item.notification_id ||
+           item.brand_id || item.client_id || item.project_id || item.campaign_id ||
+           item.account_id || item.key || "");
   }
 
   createItem(sheetName, item) {
@@ -603,7 +611,8 @@ class Store {
   updateItem(sheetName, id, updates) {
     if (!this.state[sheetName]) this.state[sheetName] = [];
     const list = this.state[sheetName];
-    const index = list.findIndex(i => this.getPrimaryId(i) === id);
+    const target = String(id);
+    const index = list.findIndex(i => this.getPrimaryId(i, sheetName) === target);
 
     // Upsert for SETTINGS sheet so configuration keys never get lost
     if (index === -1) {
@@ -693,7 +702,8 @@ class Store {
 
   deleteItem(sheetName, id) {
     const list = this.state[sheetName] || [];
-    const index = list.findIndex(i => this.getPrimaryId(i) === id);
+    const target = String(id);
+    const index = list.findIndex(i => this.getPrimaryId(i, sheetName) === target);
     if (index === -1) return false;
 
     const removed = list.splice(index, 1)[0];
@@ -840,7 +850,7 @@ class Store {
     workSheets.forEach(sheet => {
       const items = [...(this.state[sheet] || [])];
       items.forEach(item => {
-        const id = this.getPrimaryId(item);
+        const id = this.getPrimaryId(item, sheet);
         if (id) {
           this.deleteItem(sheet, id);
         }

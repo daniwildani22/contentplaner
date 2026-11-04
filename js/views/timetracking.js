@@ -7,6 +7,7 @@
  */
 
 import { store } from "../store.js";
+import { auth } from "../auth.js";
 import { SHEET_NAMES } from "../config.js";
 
 let timerInterval = null;
@@ -130,7 +131,9 @@ export function renderTimeTracking(container) {
                   <input type="checkbox" ${r.done ? 'checked' : ''} onchange="window.toggleRoutineItem('${r.id}')" class="rounded text-blue-600 w-4 h-4">
                   <span class="${r.done ? 'line-through text-slate-400' : 'text-slate-800 font-medium'}">${r.text}</span>
                 </label>
-                <button class="text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition" onclick="window.deleteRoutineItem('${r.id}')">✕</button>
+                ${auth.isAdminOrOwner() ? `
+                  <button class="text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition" onclick="window.deleteRoutineItem('${r.id}')">✕</button>
+                ` : ''}
               </div>
             `).join('')}
           </div>
@@ -180,9 +183,16 @@ export function renderTimeTracking(container) {
                           ${entry.duration} Mnt
                         </td>
                         <td class="py-3 px-4 text-right">
-                          <button class="font-bold text-slate-400 hover:text-rose-600 text-xs" onclick="window.deleteTimeEntry('${entry.time_id}')">
-                            Hapus
-                          </button>
+                          <div class="flex items-center justify-end gap-2">
+                            <button class="font-bold text-blue-600 hover:text-blue-800 text-xs" onclick="window.openEditTimeModal('${entry.time_id}')">
+                              Edit
+                            </button>
+                            ${auth.isAdminOrOwner() ? `
+                              <button class="font-bold text-slate-400 hover:text-rose-600 text-xs" onclick="window.deleteTimeEntry('${entry.time_id}')">
+                                Hapus
+                              </button>
+                            ` : ''}
+                          </div>
                         </td>
                       </tr>
                     `;
@@ -269,6 +279,11 @@ function setupTimeListeners(container, tasks, routines) {
   });
 
   // Global functions
+  window.openEditTimeModal = (timeId) => {
+    const entry = store.getItemById(SHEET_NAMES.TIME_TRACKING, timeId);
+    if (entry) openManualTimeModal(tasks, entry);
+  };
+
   window.toggleRoutineItem = (id) => {
     const setting = store.getItemById(SHEET_NAMES.SETTINGS, "daily_routine_items");
     let list = [];
@@ -279,6 +294,11 @@ function setupTimeListeners(container, tasks, routines) {
   };
 
   window.deleteRoutineItem = (id) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus rutinitas.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus rutinitas.");
+      return;
+    }
     const setting = store.getItemById(SHEET_NAMES.SETTINGS, "daily_routine_items");
     let list = [];
     try { list = JSON.parse(setting.value || setting.setting_value); } catch (e) {}
@@ -288,63 +308,92 @@ function setupTimeListeners(container, tasks, routines) {
   };
 
   window.deleteTimeEntry = (id) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan durasi kerja.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan durasi kerja.");
+      return;
+    }
     if (confirm("Hapus baris catatan waktu kerja ini?")) {
       store.deleteItem(SHEET_NAMES.TIME_TRACKING, id);
+      if (window.showToast) window.showToast("🗑️ Catatan durasi berhasil dihapus.", "info");
       renderTimeTracking(container);
     }
   };
 }
 
-function openManualTimeModal(tasks = []) {
+function openManualTimeModal(tasks = [], item = null) {
   const modalContainer = document.getElementById("global-modal-container");
   if (!modalContainer) return;
+
+  const isEdit = !!item;
+  const data = item || {
+    activity: "",
+    task_id: "",
+    date: new Date().toISOString().slice(0, 10),
+    duration: 60,
+    start_time: "09:00",
+    end_time: "10:00",
+    notes: ""
+  };
 
   modalContainer.innerHTML = `
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop">
       <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
         <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <h3 class="font-extrabold text-slate-900 text-sm">Catat Durasi Kerja Manual</h3>
+          <div>
+            <h3 class="font-extrabold text-slate-900 text-sm">
+              ${isEdit ? 'Edit Catatan Durasi Kerja' : 'Catat Durasi Kerja Manual'}
+            </h3>
+            <p class="text-xs text-slate-500">${isEdit ? 'Perbarui rincian durasi atau tugas terkait' : 'Dokumentasikan durasi jam kerja secara manual'}</p>
+          </div>
           <button id="modal-time-close" class="p-1 rounded text-slate-400 hover:text-slate-700">✕</button>
         </div>
         <form id="time-log-form" class="p-6 space-y-4 text-xs">
           <div>
             <label class="block font-bold text-slate-700 mb-1">Nama Aktivitas <span class="text-rose-500">*</span></label>
-            <input type="text" id="form-time-act" required placeholder="Shooting scene texture serum" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none">
+            <input type="text" id="form-time-act" required value="${data.activity || ''}" placeholder="Shooting scene texture serum" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none">
           </div>
           <div>
             <label class="block font-bold text-slate-700 mb-1">Terkait Tugas</label>
             <select id="form-time-task" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
               <option value="">-- Umum / Tanpa Tugas --</option>
-              ${tasks.map(t => `<option value="${t.task_id}">${t.task_title}</option>`).join('')}
+              ${tasks.map(t => `<option value="${t.task_id}" ${data.task_id === t.task_id ? 'selected' : ''}>${t.task_title}</option>`).join('')}
             </select>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Tanggal</label>
-              <input type="date" id="form-time-date" value="${new Date().toISOString().slice(0, 10)}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
+              <input type="date" id="form-time-date" value="${data.date || new Date().toISOString().slice(0, 10)}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Durasi Total (Menit) <span class="text-rose-500">*</span></label>
-              <input type="number" id="form-time-dur" required value="60" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none font-bold">
+              <input type="number" id="form-time-dur" required value="${data.duration || 60}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none font-bold">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Jam Mulai</label>
-              <input type="time" id="form-time-start" value="09:00" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
+              <input type="time" id="form-time-start" value="${data.start_time || '09:00'}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Jam Selesai</label>
-              <input type="time" id="form-time-end" value="10:00" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
+              <input type="time" id="form-time-end" value="${data.end_time || '10:00'}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
             </div>
           </div>
           <div>
             <label class="block font-bold text-slate-700 mb-1">Catatan Tambahan</label>
-            <input type="text" id="form-time-notes" placeholder="Shooting di studio lantai 2" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
+            <input type="text" id="form-time-notes" value="${data.notes || ''}" placeholder="Shooting di studio lantai 2" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
-          <div class="pt-4 border-t border-slate-200 flex justify-end gap-2.5">
-            <button type="button" id="modal-time-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Batal</button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white">Simpan Log Waktu</button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-time-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Log</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-time-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white">${isEdit ? 'Simpan Perubahan' : 'Simpan Log Waktu'}</button>
+            </div>
           </div>
         </form>
       </div>
@@ -355,9 +404,20 @@ function openManualTimeModal(tasks = []) {
   document.getElementById("modal-time-close")?.addEventListener("click", close);
   document.getElementById("modal-time-cancel")?.addEventListener("click", close);
 
+  document.getElementById("modal-time-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus baris catatan waktu kerja ini?")) {
+      store.deleteItem(SHEET_NAMES.TIME_TRACKING, item.time_id);
+      if (window.showToast) window.showToast("🗑️ Catatan durasi berhasil dihapus.", "info");
+      close();
+      const main = document.getElementById("main-view-container");
+      if (main) renderTimeTracking(main);
+    }
+  });
+
   document.getElementById("time-log-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
-    store.createItem(SHEET_NAMES.TIME_TRACKING, {
+    const payload = {
       task_id: document.getElementById("form-time-task").value,
       activity: document.getElementById("form-time-act").value.trim(),
       date: document.getElementById("form-time-date").value,
@@ -365,7 +425,16 @@ function openManualTimeModal(tasks = []) {
       start_time: document.getElementById("form-time-start").value,
       end_time: document.getElementById("form-time-end").value,
       notes: document.getElementById("form-time-notes").value.trim()
-    });
+    };
+
+    if (isEdit) {
+      store.updateItem(SHEET_NAMES.TIME_TRACKING, item.time_id, payload);
+      if (window.showToast) window.showToast("✅ Catatan durasi berhasil diperbarui!", "success");
+    } else {
+      store.createItem(SHEET_NAMES.TIME_TRACKING, payload);
+      if (window.showToast) window.showToast("✅ Catatan durasi baru berhasil disimpan!", "success");
+    }
+
     close();
     const main = document.getElementById("main-view-container");
     if (main) renderTimeTracking(main);

@@ -1,7 +1,7 @@
 ﻿/**
  * ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER - COMPLETE APPLICATION BUNDLE
  * Standalone Zero-Dependency Build (Works directly via file:/// and http://)
- * Generated: 2026-11-04 10:38:23
+ * Generated: 2026-11-04 11:23:38
  */
 (function(window, document) {
 'use strict';
@@ -1079,17 +1079,25 @@ class Store {
 
   getItemById(sheetName, id) {
     const list = this.getItems(sheetName);
-    return list.find(item => this.getPrimaryId(item) === id) || null;
+    const target = String(id);
+    return list.find(item => this.getPrimaryId(item, sheetName) === target) || null;
   }
 
-  getPrimaryId(item) {
+  getPrimaryId(item, sheetName = null) {
     if (!item) return "";
-    return item.id || item.user_id || item.brand_id || item.client_id || item.project_id ||
-           item.campaign_id || item.account_id || item.content_id || item.task_id ||
+    if (sheetName) {
+      const pk = this.getPrimaryIdKey(sheetName);
+      if (item[pk] !== undefined && item[pk] !== null && item[pk] !== "") {
+        return String(item[pk]);
+      }
+    }
+    return String(item.id || item.user_id || item.content_id || item.task_id ||
            item.subtask_id || item.calendar_id || item.script_id || item.production_id ||
            item.revision_id || item.publication_id || item.analytics_id || item.media_id ||
            item.reference_id || item.time_id || item.income_id || item.expense_id ||
-           item.invoice_id || item.payment_id || item.target_id || item.notification_id || item.key;
+           item.invoice_id || item.payment_id || item.target_id || item.notification_id ||
+           item.brand_id || item.client_id || item.project_id || item.campaign_id ||
+           item.account_id || item.key || "");
   }
 
   createItem(sheetName, item) {
@@ -1121,7 +1129,8 @@ class Store {
   updateItem(sheetName, id, updates) {
     if (!this.state[sheetName]) this.state[sheetName] = [];
     const list = this.state[sheetName];
-    const index = list.findIndex(i => this.getPrimaryId(i) === id);
+    const target = String(id);
+    const index = list.findIndex(i => this.getPrimaryId(i, sheetName) === target);
 
     // Upsert for SETTINGS sheet so configuration keys never get lost
     if (index === -1) {
@@ -1211,7 +1220,8 @@ class Store {
 
   deleteItem(sheetName, id) {
     const list = this.state[sheetName] || [];
-    const index = list.findIndex(i => this.getPrimaryId(i) === id);
+    const target = String(id);
+    const index = list.findIndex(i => this.getPrimaryId(i, sheetName) === target);
     if (index === -1) return false;
 
     const removed = list.splice(index, 1)[0];
@@ -1358,7 +1368,7 @@ class Store {
     workSheets.forEach(sheet => {
       const items = [...(this.state[sheet] || [])];
       items.forEach(item => {
-        const id = this.getPrimaryId(item);
+        const id = this.getPrimaryId(item, sheet);
         if (id) {
           this.deleteItem(sheet, id);
         }
@@ -2530,6 +2540,7 @@ const { renderContent } = (function() {
  */
 // [import stripped]
 // [import stripped]
+// [import stripped]
 let currentViewMode = "kanban"; // 'kanban' or 'list'
 let searchQuery = "";
 let selectedPlatform = "ALL";
@@ -2696,9 +2707,11 @@ function renderContentCard(item) {
           </button>
         ` : ''}
 
-        <button class="text-[10px] font-bold text-slate-400 hover:text-rose-600" onclick="window.confirmDeleteContent('${item.content_id}')">
-          Hapus
-        </button>
+        ${auth.isAdminOrOwner() ? `
+          <button class="text-[10px] font-bold text-slate-400 hover:text-rose-600" onclick="window.confirmDeleteContent('${item.content_id}')">
+            Hapus
+          </button>
+        ` : ''}
       </div>
     </div>
   `;
@@ -2767,9 +2780,11 @@ function renderListView(items) {
                     <button class="text-xs font-bold text-blue-600 hover:text-blue-800" onclick="window.openEditContentModal('${item.content_id}')">
                       Edit
                     </button>
-                    <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.confirmDeleteContent('${item.content_id}')">
-                      Hapus
-                    </button>
+                    ${auth.isAdminOrOwner() ? `
+                      <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.confirmDeleteContent('${item.content_id}')">
+                        Hapus
+                      </button>
+                    ` : ''}
                   </td>
                 </tr>
               `;
@@ -2841,8 +2856,17 @@ function setupEventListeners(container, brands, projects, campaigns) {
   };
 
   window.confirmDeleteContent = (contentId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) {
+        window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus data perencanaan konten.", "error");
+      } else {
+        alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus data perencanaan konten.");
+      }
+      return;
+    }
     if (confirm("Apakah Anda yakin ingin menghapus perencanaan konten ini?")) {
       store.deleteItem(SHEET_NAMES.CONTENT_PLANNING, contentId);
+      if (window.showToast) window.showToast("🗑️ Perencanaan konten berhasil dihapus.", "info");
       renderContent(container);
     }
   };
@@ -2973,13 +2997,20 @@ function openContentModal(item = null, brands = [], projects = [], campaigns = [
           </div>
 
           <!-- Footer Buttons -->
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-cancel-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              ${isEdit ? 'Simpan Perubahan' : 'Buat Perencanaan'}
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-delete-content-btn" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Konten</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-cancel-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                ${isEdit ? 'Simpan Perubahan' : 'Buat Perencanaan'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -2990,6 +3021,17 @@ function openContentModal(item = null, brands = [], projects = [], campaigns = [
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-close-btn")?.addEventListener("click", close);
   document.getElementById("modal-cancel-btn")?.addEventListener("click", close);
+
+  document.getElementById("modal-delete-content-btn")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Apakah Anda yakin ingin menghapus perencanaan konten ini?")) {
+      store.deleteItem(SHEET_NAMES.CONTENT_PLANNING, item.content_id);
+      if (window.showToast) window.showToast("🗑️ Perencanaan konten berhasil dihapus.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderContent(mainContainer);
+    }
+  });
 
   document.getElementById("content-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -3036,6 +3078,7 @@ const { renderCalendar } = (function() {
  * File: js/views/calendar.js
  * =========================================================================================
  */
+// [import stripped]
 // [import stripped]
 // [import stripped]
 let currentCalendarDate = new Date();
@@ -3258,9 +3301,11 @@ function renderAgendaView(events) {
                 <button class="text-xs font-bold text-blue-600 hover:text-blue-800" onclick="window.openCalendarModal('${ev.calendar_id}')">
                   Edit Jadwal
                 </button>
-                <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteCalendarEvent('${ev.calendar_id}')">
-                  Hapus
-                </button>
+                ${auth.isAdminOrOwner() ? `
+                  <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteCalendarEvent('${ev.calendar_id}')">
+                    Hapus
+                  </button>
+                ` : ''}
               </div>
             </div>
           `;
@@ -3321,8 +3366,17 @@ function setupCalendarListeners(container, contents) {
   };
 
   window.deleteCalendarEvent = (calendarId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) {
+        window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus jadwal kalender.", "error");
+      } else {
+        alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus jadwal kalender.");
+      }
+      return;
+    }
     if (confirm("Hapus jadwal konten ini dari kalender?")) {
       store.deleteItem(SHEET_NAMES.CONTENT_CALENDAR, calendarId);
+      if (window.showToast) window.showToast("🗑️ Jadwal konten berhasil dihapus dari kalender.", "info");
       renderCalendar(container);
     }
   };
@@ -3408,13 +3462,20 @@ function openScheduleModal(eventData = null, contents = []) {
             <input type="text" id="form-cal-notes" value="${data.notes || ''}" placeholder="Misal: Prime time malam Jumat / Hari gajian" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-cal-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Jadwal
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-cal-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Jadwal</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-cal-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                Simpan Jadwal
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -3424,6 +3485,17 @@ function openScheduleModal(eventData = null, contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-cal-close")?.addEventListener("click", close);
   document.getElementById("modal-cal-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-cal-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus jadwal konten ini dari kalender?")) {
+      store.deleteItem(SHEET_NAMES.CONTENT_CALENDAR, eventData.calendar_id);
+      if (window.showToast) window.showToast("🗑️ Jadwal konten berhasil dihapus dari kalender.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderCalendar(mainContainer);
+    }
+  });
 
   document.getElementById("schedule-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -3461,6 +3533,7 @@ const { renderTasks } = (function() {
  * Design: Oceanic Inventory Design System (5-Column Dynamic Kanban Board)
  * =========================================================================================
  */
+// [import stripped]
 // [import stripped]
 // [import stripped]
 let taskViewMode = "kanban"; // 'kanban', 'table', 'daily'
@@ -3503,10 +3576,12 @@ function renderTasks(container) {
             <span class="text-xs text-[#698c9f] hidden sm:inline">• Database: '${allTasks.length}' Tugas Tersimpan</span>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="window.confirmClearAllTasks()" class="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 font-semibold transition-colors bg-white px-3 py-1.5 rounded-full border border-rose-200 shadow-2xs hover:bg-rose-50" type="button" title="Kosongkan seluruh tugas pekerjaan">
-              <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
-              <span class="hidden sm:inline">Kosongkan Semua Tugas</span>
-            </button>
+            ${auth.isAdminOrOwner() ? `
+              <button onclick="window.confirmClearAllTasks()" class="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 font-semibold transition-colors bg-white px-3 py-1.5 rounded-full border border-rose-200 shadow-2xs hover:bg-rose-50" type="button" title="Kosongkan seluruh tugas pekerjaan">
+                <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+                <span class="hidden sm:inline">Kosongkan Semua Tugas</span>
+              </button>
+            ` : ''}
             <button onclick="window.triggerCloudSync()" class="flex items-center gap-1.5 text-xs text-[#2c6673] hover:text-[#1e3e50] font-semibold transition-colors shadow-2xs bg-white px-3 py-1.5 rounded-full border border-[#d2e2ec]" type="button">
               <span class="material-symbols-outlined text-[16px]">sync</span>
               <span>Sinkron Data</span>
@@ -4071,11 +4146,20 @@ function setupTaskListeners(container) {
     document.getElementById("task-form-deadline").value = task.deadline || "";
     document.getElementById("task-form-desc").value = task.description || "";
     document.getElementById("modal-task-title-text").textContent = `Edit Tugas #${task.task_id}`;
-    document.getElementById("btn-task-delete-in-modal")?.classList.remove("hidden");
+    if (auth.isAdminOrOwner()) {
+      document.getElementById("btn-task-delete-in-modal")?.classList.remove("hidden");
+    } else {
+      document.getElementById("btn-task-delete-in-modal")?.classList.add("hidden");
+    }
     document.getElementById("modal-task-manage")?.classList.remove("hidden");
   };
 
   window.confirmDeleteTask = (taskId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus tugas.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus tugas.");
+      return;
+    }
     if (confirm(`Apakah Anda yakin ingin menghapus tugas #${taskId}? Tindakan ini akan menghapusnya dari papan kerja dan database.`)) {
       store.deleteItem(SHEET_NAMES.CONTENT_TASKS, taskId);
       if (window.showToast) window.showToast(`🗑️ Tugas #${taskId} berhasil dihapus.`, "info");
@@ -4094,6 +4178,11 @@ function setupTaskListeners(container) {
   };
 
   window.confirmClearAllTasks = () => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk mengosongkan tugas.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk mengosongkan tugas.");
+      return;
+    }
     if (confirm("⚠️ PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SEMUA TUGAS pekerjaan?\n\nPapan tugas akan dikosongkan secara bersih sehingga Anda dapat mulai menginput pekerjaan asli studio Anda.")) {
       store.clearAllTasks();
       if (window.showToast) window.showToast("🧹 Seluruh data tugas pekerjaan berhasil dikosongkan!", "success");
@@ -4114,6 +4203,7 @@ const { renderProduction } = (function() {
  * File: js/views/production.js
  * =========================================================================================
  */
+// [import stripped]
 // [import stripped]
 // [import stripped]
 let activeProductionTab = "scripts"; // 'scripts', 'production', 'editing'
@@ -4241,9 +4331,11 @@ function renderScriptsTab(scripts) {
                 <button class="text-xs font-bold text-slate-600 hover:text-slate-900" onclick="window.openEditScriptModal('${s.script_id}')">
                   Edit
                 </button>
-                <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteScript('${s.script_id}')">
-                  Hapus
-                </button>
+                ${auth.isAdminOrOwner() ? `
+                  <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteScript('${s.script_id}')">
+                    Hapus
+                  </button>
+                ` : ''}
               </div>
             </div>
           </div>
@@ -4319,9 +4411,11 @@ function renderProductionTab(productions) {
               <button class="text-xs font-bold text-blue-600 hover:text-blue-800" onclick="window.openEditProductionModal('${p.production_id}')">
                 Edit Sesi
               </button>
-              <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteProduction('${p.production_id}')">
-                Hapus
-              </button>
+              ${auth.isAdminOrOwner() ? `
+                <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteProduction('${p.production_id}')">
+                  Hapus
+                </button>
+              ` : ''}
             </div>
           </div>
         `;
@@ -4387,9 +4481,11 @@ function renderEditingTab(revisions) {
                     <button class="text-xs font-bold text-blue-600 hover:text-blue-800" onclick="window.openEditRevisionModal('${rev.revision_id}')">
                       Edit
                     </button>
-                    <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteRevision('${rev.revision_id}')">
-                      Hapus
-                    </button>
+                    ${auth.isAdminOrOwner() ? `
+                      <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteRevision('${rev.revision_id}')">
+                        Hapus
+                      </button>
+                    ` : ''}
                   </td>
                 </tr>
               `;
@@ -4451,8 +4547,14 @@ function setupProductionListeners(container, contents) {
   };
 
   window.deleteScript = (scriptId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus skrip naskah.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus skrip naskah.");
+      return;
+    }
     if (confirm("Hapus naskah ini?")) {
       store.deleteItem(SHEET_NAMES.CONTENT_SCRIPTS, scriptId);
+      if (window.showToast) window.showToast("🗑️ Naskah berhasil dihapus.", "info");
       renderProduction(container);
     }
   };
@@ -4463,8 +4565,14 @@ function setupProductionListeners(container, contents) {
   };
 
   window.deleteProduction = (prodId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus sesi produksi.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus sesi produksi.");
+      return;
+    }
     if (confirm("Hapus catatan sesi shooting ini?")) {
       store.deleteItem(SHEET_NAMES.CONTENT_PRODUCTION, prodId);
+      if (window.showToast) window.showToast("🗑️ Sesi shooting produksi berhasil dihapus.", "info");
       renderProduction(container);
     }
   };
@@ -4485,8 +4593,14 @@ function setupProductionListeners(container, contents) {
   };
 
   window.deleteRevision = (revId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan revisi.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan revisi.");
+      return;
+    }
     if (confirm("Hapus catatan revisi ini?")) {
       store.deleteItem(SHEET_NAMES.CONTENT_REVISIONS, revId);
+      if (window.showToast) window.showToast("🗑️ Catatan revisi berhasil dihapus.", "info");
       renderProduction(container);
     }
   };
@@ -4587,13 +4701,20 @@ function openScriptModal(script = null, contents = []) {
             </div>
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-script-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Naskah
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-script-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Naskah</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-script-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                Simpan Naskah
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -4603,6 +4724,17 @@ function openScriptModal(script = null, contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-script-close")?.addEventListener("click", close);
   document.getElementById("modal-script-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-script-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus naskah ini?")) {
+      store.deleteItem(SHEET_NAMES.CONTENT_SCRIPTS, script.script_id);
+      if (window.showToast) window.showToast("🗑️ Naskah berhasil dihapus.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderProduction(mainContainer);
+    }
+  });
 
   document.getElementById("script-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -4709,13 +4841,20 @@ function openProductionModal(prod = null, contents = []) {
             </div>
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-prod-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Sesi
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-prod-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Sesi</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-prod-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                Simpan Sesi
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -4725,6 +4864,17 @@ function openProductionModal(prod = null, contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-prod-close")?.addEventListener("click", close);
   document.getElementById("modal-prod-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-prod-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus catatan sesi shooting ini?")) {
+      store.deleteItem(SHEET_NAMES.CONTENT_PRODUCTION, prod.production_id);
+      if (window.showToast) window.showToast("🗑️ Sesi shooting produksi berhasil dihapus.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderProduction(mainContainer);
+    }
+  });
 
   document.getElementById("production-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -4823,13 +4973,20 @@ function openRevisionModal(rev = null, contents = []) {
             </div>
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-rev-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Revisi
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-rev-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Revisi</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-rev-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                Simpan Revisi
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -4839,6 +4996,17 @@ function openRevisionModal(rev = null, contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-rev-close")?.addEventListener("click", close);
   document.getElementById("modal-rev-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-rev-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus catatan revisi ini?")) {
+      store.deleteItem(SHEET_NAMES.CONTENT_REVISIONS, rev.revision_id);
+      if (window.showToast) window.showToast("🗑️ Catatan revisi berhasil dihapus.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderProduction(mainContainer);
+    }
+  });
 
   document.getElementById("revision-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -4876,6 +5044,7 @@ const { renderMedia } = (function() {
  * File: js/views/media.js
  * =========================================================================================
  */
+// [import stripped]
 // [import stripped]
 // [import stripped]
 // [import stripped]
@@ -5021,9 +5190,16 @@ function renderMediaGrid(items) {
                   </a>
                 ` : `<span class="text-slate-400 text-[10px]">Tersimpan Lokal</span>`}
 
-                <button class="font-bold text-slate-400 hover:text-rose-600 text-xs" onclick="window.deleteMediaItem('${m.media_id}')">
-                  Hapus
-                </button>
+                <div class="flex items-center gap-2">
+                  <button class="font-bold text-blue-600 hover:text-blue-800 text-xs" onclick="window.openEditMediaModal('${m.media_id}')">
+                    Edit
+                  </button>
+                  ${auth.isAdminOrOwner() ? `
+                    <button class="font-bold text-slate-400 hover:text-rose-600 text-xs" onclick="window.deleteMediaItem('${m.media_id}')">
+                      Hapus
+                    </button>
+                  ` : ''}
+                </div>
               </div>
             </div>
           </div>
@@ -5084,9 +5260,14 @@ function renderReferencesGrid(refs) {
                 <button class="text-xs font-bold text-emerald-600 hover:text-emerald-800" onclick="window.convertRefToIdea('${r.reference_id}')" title="Buat ide konten dari referensi ini">
                   ⚡ Jadi Ide
                 </button>
-                <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteReference('${r.reference_id}')">
-                  Hapus
+                <button class="text-xs font-bold text-blue-600 hover:text-blue-800" onclick="window.openEditReferenceModal('${r.reference_id}')">
+                  Edit
                 </button>
+                ${auth.isAdminOrOwner() ? `
+                  <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteReference('${r.reference_id}')">
+                    Hapus
+                  </button>
+                ` : ''}
               </div>
             </div>
           </div>
@@ -5142,16 +5323,38 @@ function setupMediaListeners(container, brands, contents) {
   });
 
   // Global functions
+  window.openEditMediaModal = (mediaId) => {
+    const m = store.getItemById(SHEET_NAMES.MEDIA_LIBRARY, mediaId);
+    if (m) openUploadMediaModal(brands, contents, m);
+  };
+
+  window.openEditReferenceModal = (refId) => {
+    const r = store.getItemById(SHEET_NAMES.REFERENCES, refId);
+    if (r) openReferenceModal(r, contents);
+  };
+
   window.deleteMediaItem = (mediaId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus berkas media.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus berkas media.");
+      return;
+    }
     if (confirm("Hapus berkas media ini dari daftar perpustakaan?")) {
       store.deleteItem(SHEET_NAMES.MEDIA_LIBRARY, mediaId);
+      if (window.showToast) window.showToast("🗑️ Berkas media berhasil dihapus.", "info");
       renderMedia(container);
     }
   };
 
   window.deleteReference = (refId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan riset referensi.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan riset referensi.");
+      return;
+    }
     if (confirm("Hapus catatan referensi inspirasi ini?")) {
       store.deleteItem(SHEET_NAMES.REFERENCES, refId);
+      if (window.showToast) window.showToast("🗑️ Inspirasi referensi berhasil dihapus.", "info");
       renderMedia(container);
     }
   };
@@ -5175,44 +5378,57 @@ function setupMediaListeners(container, brands, contents) {
   };
 }
 
-function openUploadMediaModal(brands = [], contents = []) {
+function openUploadMediaModal(brands = [], contents = [], item = null) {
   const modalContainer = document.getElementById("global-modal-container");
   if (!modalContainer) return;
+
+  const isEdit = !!item;
+  const data = item || {
+    file_name: "",
+    category: "Raw Footage",
+    brand_id: "",
+    file_url: "",
+    notes: ""
+  };
 
   modalContainer.innerHTML = `
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop">
       <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
         <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div>
-            <h3 class="font-extrabold text-slate-900 text-sm">Upload Berkas / Catat Media Drive</h3>
-            <p class="text-xs text-slate-500">Unggah berkas langsung ke Google Drive atau simpan tautan aset</p>
+            <h3 class="font-extrabold text-slate-900 text-sm">
+              ${isEdit ? 'Edit Informasi Media' : 'Upload Berkas / Catat Media Drive'}
+            </h3>
+            <p class="text-xs text-slate-500">${isEdit ? 'Perbarui detail nama, kategori, atau tautan berkas' : 'Unggah berkas langsung ke Google Drive atau simpan tautan aset'}</p>
           </div>
           <button id="modal-upload-close" class="p-1 rounded text-slate-400 hover:text-slate-700">✕</button>
         </div>
 
         <form id="upload-media-form" class="p-6 space-y-4 text-xs">
-          <!-- File Picker -->
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Pilih File dari Perangkat (Opsional)</label>
-            <input type="file" id="form-media-file" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50">
-            <p class="text-[10px] text-slate-400 mt-1">File akan dienkode Base64 dan disimpan ke Google Drive.</p>
-          </div>
+          ${!isEdit ? `
+            <!-- File Picker -->
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Pilih File dari Perangkat (Opsional)</label>
+              <input type="file" id="form-media-file" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50">
+              <p class="text-[10px] text-slate-400 mt-1">File akan dienkode Base64 dan disimpan ke Google Drive.</p>
+            </div>
+          ` : ''}
 
           <!-- File Name -->
           <div>
             <label class="block font-bold text-slate-700 mb-1">Nama Berkas <span class="text-rose-500">*</span></label>
-            <input type="text" id="form-media-name" required placeholder="Contoh: B-Roll_Botol_Serum_Slowmo_4K.mp4" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none">
+            <input type="text" id="form-media-name" required value="${data.file_name}" placeholder="Contoh: B-Roll_Botol_Serum_Slowmo_4K.mp4" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none">
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Kategori Berkas</label>
               <select id="form-media-cat" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
-                <option value="Raw Footage">Raw Footage</option>
-                <option value="Brand Asset">Brand Asset / Logo</option>
-                <option value="Music & SFX">Music & SFX</option>
-                <option value="Final Video">Final Video</option>
-                <option value="General">General</option>
+                <option value="Raw Footage" ${data.category === 'Raw Footage' ? 'selected' : ''}>Raw Footage</option>
+                <option value="Brand Asset" ${data.category === 'Brand Asset' ? 'selected' : ''}>Brand Asset / Logo</option>
+                <option value="Music & SFX" ${data.category === 'Music & SFX' ? 'selected' : ''}>Music & SFX</option>
+                <option value="Final Video" ${data.category === 'Final Video' ? 'selected' : ''}>Final Video</option>
+                <option value="General" ${data.category === 'General' ? 'selected' : ''}>General</option>
               </select>
             </div>
 
@@ -5220,28 +5436,35 @@ function openUploadMediaModal(brands = [], contents = []) {
               <label class="block font-bold text-slate-700 mb-1">Terkait Brand</label>
               <select id="form-media-brand" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
                 <option value="">-- Tanpa Brand --</option>
-                ${brands.map(b => `<option value="${b.brand_id}">${b.brand_name}</option>`).join('')}
+                ${brands.map(b => `<option value="${b.brand_id}" ${data.brand_id === b.brand_id ? 'selected' : ''}>${b.brand_name}</option>`).join('')}
               </select>
             </div>
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Tautan Google Drive (Jika sudah ada)</label>
-            <input type="url" id="form-media-url" placeholder="https://drive.google.com/file/d/..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
+            <label class="block font-bold text-slate-700 mb-1">Tautan Google Drive / Cloud URL</label>
+            <input type="url" id="form-media-url" value="${data.file_url || ''}" placeholder="https://drive.google.com/file/d/..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
 
           <div>
             <label class="block font-bold text-slate-700 mb-1">Catatan Tambahan</label>
-            <input type="text" id="form-media-notes" placeholder="Resolusi 4K, 60fps, pencahayaan studio" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
+            <input type="text" id="form-media-notes" value="${data.notes || ''}" placeholder="Resolusi 4K, 60fps, pencahayaan studio" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-upload-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" id="btn-submit-upload" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Berkas
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-upload-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Media</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-upload-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" id="btn-submit-upload" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                ${isEdit ? 'Simpan Perubahan' : 'Simpan Berkas'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -5251,6 +5474,17 @@ function openUploadMediaModal(brands = [], contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-upload-close")?.addEventListener("click", close);
   document.getElementById("modal-upload-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-upload-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus berkas media ini dari daftar perpustakaan?")) {
+      store.deleteItem(SHEET_NAMES.MEDIA_LIBRARY, item.media_id);
+      if (window.showToast) window.showToast("🗑️ Berkas media berhasil dihapus.", "info");
+      close();
+      const main = document.getElementById("main-view-container");
+      if (main) renderMedia(main);
+    }
+  });
 
   // Auto-fill file name when file is selected
   document.getElementById("form-media-file")?.addEventListener("change", (e) => {
@@ -5264,7 +5498,7 @@ function openUploadMediaModal(brands = [], contents = []) {
     e.preventDefault();
     const submitBtn = document.getElementById("btn-submit-upload");
     submitBtn.disabled = true;
-    submitBtn.innerText = "Mengunggah...";
+    submitBtn.innerText = isEdit ? "Menyimpan..." : "Mengunggah...";
 
     const fileInput = document.getElementById("form-media-file");
     const fileName = document.getElementById("form-media-name").value.trim();
@@ -5273,12 +5507,26 @@ function openUploadMediaModal(brands = [], contents = []) {
     const manualUrl = document.getElementById("form-media-url").value.trim();
     const notes = document.getElementById("form-media-notes").value.trim();
 
-    if (fileInput.files.length > 0) {
+    if (isEdit) {
+      store.updateItem(SHEET_NAMES.MEDIA_LIBRARY, item.media_id, {
+        file_name: fileName,
+        file_type: fileName.split(".").pop().toUpperCase(),
+        category: category,
+        brand_id: brandId,
+        file_url: manualUrl,
+        notes: notes
+      });
+      if (window.showToast) window.showToast("✅ Berkas media berhasil diperbarui!", "success");
+      close();
+      const main = document.getElementById("main-view-container");
+      if (main) renderMedia(main);
+    } else if (fileInput && fileInput.files && fileInput.files.length > 0) {
       const file = fileInput.files[0];
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = reader.result;
         await api.uploadMedia(base64, fileName, file.type, category, brandId, "", notes);
+        if (window.showToast) window.showToast("✅ Berkas media berhasil diunggah!", "success");
         close();
         const main = document.getElementById("main-view-container");
         if (main) renderMedia(main);
@@ -5296,6 +5544,7 @@ function openUploadMediaModal(brands = [], contents = []) {
         upload_date: new Date().toISOString().slice(0, 10),
         notes: notes
       });
+      if (window.showToast) window.showToast("✅ Berkas media berhasil dicatat!", "success");
       close();
       const main = document.getElementById("main-view-container");
       if (main) renderMedia(main);
@@ -5371,13 +5620,20 @@ function openReferenceModal(ref = null, contents = []) {
             <input type="text" id="form-ref-notes" value="${data.notes || ''}" placeholder="Sound trending, timing transisi 0.3 detik..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-ref-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Referensi
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-ref-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Referensi</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-ref-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                Simpan Referensi
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -5387,6 +5643,17 @@ function openReferenceModal(ref = null, contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-ref-close")?.addEventListener("click", close);
   document.getElementById("modal-ref-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-ref-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus catatan referensi inspirasi ini?")) {
+      store.deleteItem(SHEET_NAMES.REFERENCES, ref.reference_id);
+      if (window.showToast) window.showToast("🗑️ Inspirasi referensi berhasil dihapus.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderMedia(mainContainer);
+    }
+  });
 
   document.getElementById("ref-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -7601,6 +7868,7 @@ const { renderTimeTracking } = (function() {
  */
 // [import stripped]
 // [import stripped]
+// [import stripped]
 let timerInterval = null;
 function renderTimeTracking(container) {
   const timeEntries = store.getItems(SHEET_NAMES.TIME_TRACKING);
@@ -7721,7 +7989,9 @@ function renderTimeTracking(container) {
                   <input type="checkbox" ${r.done ? 'checked' : ''} onchange="window.toggleRoutineItem('${r.id}')" class="rounded text-blue-600 w-4 h-4">
                   <span class="${r.done ? 'line-through text-slate-400' : 'text-slate-800 font-medium'}">${r.text}</span>
                 </label>
-                <button class="text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition" onclick="window.deleteRoutineItem('${r.id}')">✕</button>
+                ${auth.isAdminOrOwner() ? `
+                  <button class="text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition" onclick="window.deleteRoutineItem('${r.id}')">✕</button>
+                ` : ''}
               </div>
             `).join('')}
           </div>
@@ -7771,9 +8041,16 @@ function renderTimeTracking(container) {
                           ${entry.duration} Mnt
                         </td>
                         <td class="py-3 px-4 text-right">
-                          <button class="font-bold text-slate-400 hover:text-rose-600 text-xs" onclick="window.deleteTimeEntry('${entry.time_id}')">
-                            Hapus
-                          </button>
+                          <div class="flex items-center justify-end gap-2">
+                            <button class="font-bold text-blue-600 hover:text-blue-800 text-xs" onclick="window.openEditTimeModal('${entry.time_id}')">
+                              Edit
+                            </button>
+                            ${auth.isAdminOrOwner() ? `
+                              <button class="font-bold text-slate-400 hover:text-rose-600 text-xs" onclick="window.deleteTimeEntry('${entry.time_id}')">
+                                Hapus
+                              </button>
+                            ` : ''}
+                          </div>
                         </td>
                       </tr>
                     `;
@@ -7860,6 +8137,11 @@ function setupTimeListeners(container, tasks, routines) {
   });
 
   // Global functions
+  window.openEditTimeModal = (timeId) => {
+    const entry = store.getItemById(SHEET_NAMES.TIME_TRACKING, timeId);
+    if (entry) openManualTimeModal(tasks, entry);
+  };
+
   window.toggleRoutineItem = (id) => {
     const setting = store.getItemById(SHEET_NAMES.SETTINGS, "daily_routine_items");
     let list = [];
@@ -7870,6 +8152,11 @@ function setupTimeListeners(container, tasks, routines) {
   };
 
   window.deleteRoutineItem = (id) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus rutinitas.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus rutinitas.");
+      return;
+    }
     const setting = store.getItemById(SHEET_NAMES.SETTINGS, "daily_routine_items");
     let list = [];
     try { list = JSON.parse(setting.value || setting.setting_value); } catch (e) {}
@@ -7879,63 +8166,92 @@ function setupTimeListeners(container, tasks, routines) {
   };
 
   window.deleteTimeEntry = (id) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan durasi kerja.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus catatan durasi kerja.");
+      return;
+    }
     if (confirm("Hapus baris catatan waktu kerja ini?")) {
       store.deleteItem(SHEET_NAMES.TIME_TRACKING, id);
+      if (window.showToast) window.showToast("🗑️ Catatan durasi berhasil dihapus.", "info");
       renderTimeTracking(container);
     }
   };
 }
 
-function openManualTimeModal(tasks = []) {
+function openManualTimeModal(tasks = [], item = null) {
   const modalContainer = document.getElementById("global-modal-container");
   if (!modalContainer) return;
+
+  const isEdit = !!item;
+  const data = item || {
+    activity: "",
+    task_id: "",
+    date: new Date().toISOString().slice(0, 10),
+    duration: 60,
+    start_time: "09:00",
+    end_time: "10:00",
+    notes: ""
+  };
 
   modalContainer.innerHTML = `
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop">
       <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
         <div class="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <h3 class="font-extrabold text-slate-900 text-sm">Catat Durasi Kerja Manual</h3>
+          <div>
+            <h3 class="font-extrabold text-slate-900 text-sm">
+              ${isEdit ? 'Edit Catatan Durasi Kerja' : 'Catat Durasi Kerja Manual'}
+            </h3>
+            <p class="text-xs text-slate-500">${isEdit ? 'Perbarui rincian durasi atau tugas terkait' : 'Dokumentasikan durasi jam kerja secara manual'}</p>
+          </div>
           <button id="modal-time-close" class="p-1 rounded text-slate-400 hover:text-slate-700">✕</button>
         </div>
         <form id="time-log-form" class="p-6 space-y-4 text-xs">
           <div>
             <label class="block font-bold text-slate-700 mb-1">Nama Aktivitas <span class="text-rose-500">*</span></label>
-            <input type="text" id="form-time-act" required placeholder="Shooting scene texture serum" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none">
+            <input type="text" id="form-time-act" required value="${data.activity || ''}" placeholder="Shooting scene texture serum" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none">
           </div>
           <div>
             <label class="block font-bold text-slate-700 mb-1">Terkait Tugas</label>
             <select id="form-time-task" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
               <option value="">-- Umum / Tanpa Tugas --</option>
-              ${tasks.map(t => `<option value="${t.task_id}">${t.task_title}</option>`).join('')}
+              ${tasks.map(t => `<option value="${t.task_id}" ${data.task_id === t.task_id ? 'selected' : ''}>${t.task_title}</option>`).join('')}
             </select>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Tanggal</label>
-              <input type="date" id="form-time-date" value="${new Date().toISOString().slice(0, 10)}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
+              <input type="date" id="form-time-date" value="${data.date || new Date().toISOString().slice(0, 10)}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Durasi Total (Menit) <span class="text-rose-500">*</span></label>
-              <input type="number" id="form-time-dur" required value="60" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none font-bold">
+              <input type="number" id="form-time-dur" required value="${data.duration || 60}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none font-bold">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Jam Mulai</label>
-              <input type="time" id="form-time-start" value="09:00" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
+              <input type="time" id="form-time-start" value="${data.start_time || '09:00'}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Jam Selesai</label>
-              <input type="time" id="form-time-end" value="10:00" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
+              <input type="time" id="form-time-end" value="${data.end_time || '10:00'}" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
             </div>
           </div>
           <div>
             <label class="block font-bold text-slate-700 mb-1">Catatan Tambahan</label>
-            <input type="text" id="form-time-notes" placeholder="Shooting di studio lantai 2" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
+            <input type="text" id="form-time-notes" value="${data.notes || ''}" placeholder="Shooting di studio lantai 2" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
-          <div class="pt-4 border-t border-slate-200 flex justify-end gap-2.5">
-            <button type="button" id="modal-time-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Batal</button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white">Simpan Log Waktu</button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-time-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Log</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-time-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white">${isEdit ? 'Simpan Perubahan' : 'Simpan Log Waktu'}</button>
+            </div>
           </div>
         </form>
       </div>
@@ -7946,9 +8262,20 @@ function openManualTimeModal(tasks = []) {
   document.getElementById("modal-time-close")?.addEventListener("click", close);
   document.getElementById("modal-time-cancel")?.addEventListener("click", close);
 
+  document.getElementById("modal-time-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus baris catatan waktu kerja ini?")) {
+      store.deleteItem(SHEET_NAMES.TIME_TRACKING, item.time_id);
+      if (window.showToast) window.showToast("🗑️ Catatan durasi berhasil dihapus.", "info");
+      close();
+      const main = document.getElementById("main-view-container");
+      if (main) renderTimeTracking(main);
+    }
+  });
+
   document.getElementById("time-log-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
-    store.createItem(SHEET_NAMES.TIME_TRACKING, {
+    const payload = {
       task_id: document.getElementById("form-time-task").value,
       activity: document.getElementById("form-time-act").value.trim(),
       date: document.getElementById("form-time-date").value,
@@ -7956,7 +8283,16 @@ function openManualTimeModal(tasks = []) {
       start_time: document.getElementById("form-time-start").value,
       end_time: document.getElementById("form-time-end").value,
       notes: document.getElementById("form-time-notes").value.trim()
-    });
+    };
+
+    if (isEdit) {
+      store.updateItem(SHEET_NAMES.TIME_TRACKING, item.time_id, payload);
+      if (window.showToast) window.showToast("✅ Catatan durasi berhasil diperbarui!", "success");
+    } else {
+      store.createItem(SHEET_NAMES.TIME_TRACKING, payload);
+      if (window.showToast) window.showToast("✅ Catatan durasi baru berhasil disimpan!", "success");
+    }
+
     close();
     const main = document.getElementById("main-view-container");
     if (main) renderTimeTracking(main);

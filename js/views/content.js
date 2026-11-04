@@ -6,6 +6,7 @@
  */
 
 import { store } from "../store.js";
+import { auth } from "../auth.js";
 import {
   SHEET_NAMES,
   CONTENT_STATUSES,
@@ -181,9 +182,11 @@ function renderContentCard(item) {
           </button>
         ` : ''}
 
-        <button class="text-[10px] font-bold text-slate-400 hover:text-rose-600" onclick="window.confirmDeleteContent('${item.content_id}')">
-          Hapus
-        </button>
+        ${auth.isAdminOrOwner() ? `
+          <button class="text-[10px] font-bold text-slate-400 hover:text-rose-600" onclick="window.confirmDeleteContent('${item.content_id}')">
+            Hapus
+          </button>
+        ` : ''}
       </div>
     </div>
   `;
@@ -252,9 +255,11 @@ function renderListView(items) {
                     <button class="text-xs font-bold text-blue-600 hover:text-blue-800" onclick="window.openEditContentModal('${item.content_id}')">
                       Edit
                     </button>
-                    <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.confirmDeleteContent('${item.content_id}')">
-                      Hapus
-                    </button>
+                    ${auth.isAdminOrOwner() ? `
+                      <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.confirmDeleteContent('${item.content_id}')">
+                        Hapus
+                      </button>
+                    ` : ''}
                   </td>
                 </tr>
               `;
@@ -326,8 +331,17 @@ function setupEventListeners(container, brands, projects, campaigns) {
   };
 
   window.confirmDeleteContent = (contentId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) {
+        window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus data perencanaan konten.", "error");
+      } else {
+        alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus data perencanaan konten.");
+      }
+      return;
+    }
     if (confirm("Apakah Anda yakin ingin menghapus perencanaan konten ini?")) {
       store.deleteItem(SHEET_NAMES.CONTENT_PLANNING, contentId);
+      if (window.showToast) window.showToast("🗑️ Perencanaan konten berhasil dihapus.", "info");
       renderContent(container);
     }
   };
@@ -458,13 +472,20 @@ function openContentModal(item = null, brands = [], projects = [], campaigns = [
           </div>
 
           <!-- Footer Buttons -->
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-cancel-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              ${isEdit ? 'Simpan Perubahan' : 'Buat Perencanaan'}
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-delete-content-btn" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Konten</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-cancel-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                ${isEdit ? 'Simpan Perubahan' : 'Buat Perencanaan'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -475,6 +496,17 @@ function openContentModal(item = null, brands = [], projects = [], campaigns = [
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-close-btn")?.addEventListener("click", close);
   document.getElementById("modal-cancel-btn")?.addEventListener("click", close);
+
+  document.getElementById("modal-delete-content-btn")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Apakah Anda yakin ingin menghapus perencanaan konten ini?")) {
+      store.deleteItem(SHEET_NAMES.CONTENT_PLANNING, item.content_id);
+      if (window.showToast) window.showToast("🗑️ Perencanaan konten berhasil dihapus.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderContent(mainContainer);
+    }
+  });
 
   document.getElementById("content-form")?.addEventListener("submit", (e) => {
     e.preventDefault();

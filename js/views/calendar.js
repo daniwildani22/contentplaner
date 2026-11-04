@@ -6,6 +6,7 @@
  */
 
 import { store } from "../store.js";
+import { auth } from "../auth.js";
 import { SHEET_NAMES, SOCIAL_PLATFORMS } from "../config.js";
 
 let currentCalendarDate = new Date();
@@ -229,9 +230,11 @@ function renderAgendaView(events) {
                 <button class="text-xs font-bold text-blue-600 hover:text-blue-800" onclick="window.openCalendarModal('${ev.calendar_id}')">
                   Edit Jadwal
                 </button>
-                <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteCalendarEvent('${ev.calendar_id}')">
-                  Hapus
-                </button>
+                ${auth.isAdminOrOwner() ? `
+                  <button class="text-xs font-bold text-slate-400 hover:text-rose-600" onclick="window.deleteCalendarEvent('${ev.calendar_id}')">
+                    Hapus
+                  </button>
+                ` : ''}
               </div>
             </div>
           `;
@@ -292,8 +295,17 @@ function setupCalendarListeners(container, contents) {
   };
 
   window.deleteCalendarEvent = (calendarId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) {
+        window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus jadwal kalender.", "error");
+      } else {
+        alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus jadwal kalender.");
+      }
+      return;
+    }
     if (confirm("Hapus jadwal konten ini dari kalender?")) {
       store.deleteItem(SHEET_NAMES.CONTENT_CALENDAR, calendarId);
+      if (window.showToast) window.showToast("🗑️ Jadwal konten berhasil dihapus dari kalender.", "info");
       renderCalendar(container);
     }
   };
@@ -379,13 +391,20 @@ function openScheduleModal(eventData = null, contents = []) {
             <input type="text" id="form-cal-notes" value="${data.notes || ''}" placeholder="Misal: Prime time malam Jumat / Hari gajian" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none">
           </div>
 
-          <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-            <button type="button" id="modal-cal-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
-              Batal
-            </button>
-            <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
-              Simpan Jadwal
-            </button>
+          <div class="pt-4 border-t border-slate-200 flex items-center justify-between gap-2.5">
+            ${isEdit && auth.isAdminOrOwner() ? `
+              <button type="button" id="modal-cal-delete" class="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition flex items-center gap-1.5">
+                <span>🗑️</span> <span>Hapus Jadwal</span>
+              </button>
+            ` : '<div></div>'}
+            <div class="flex items-center gap-2.5">
+              <button type="button" id="modal-cal-cancel" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition">
+                Batal
+              </button>
+              <button type="submit" class="px-5 py-2 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition">
+                Simpan Jadwal
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -395,6 +414,17 @@ function openScheduleModal(eventData = null, contents = []) {
   const close = () => { modalContainer.innerHTML = ""; };
   document.getElementById("modal-cal-close")?.addEventListener("click", close);
   document.getElementById("modal-cal-cancel")?.addEventListener("click", close);
+
+  document.getElementById("modal-cal-delete")?.addEventListener("click", () => {
+    if (!auth.isAdminOrOwner()) return;
+    if (confirm("Hapus jadwal konten ini dari kalender?")) {
+      store.deleteItem(SHEET_NAMES.CONTENT_CALENDAR, eventData.calendar_id);
+      if (window.showToast) window.showToast("🗑️ Jadwal konten berhasil dihapus dari kalender.", "info");
+      close();
+      const mainContainer = document.getElementById("main-view-container");
+      if (mainContainer) renderCalendar(mainContainer);
+    }
+  });
 
   document.getElementById("schedule-form")?.addEventListener("submit", (e) => {
     e.preventDefault();

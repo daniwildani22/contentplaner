@@ -7,6 +7,7 @@
  */
 
 import { store } from "../store.js";
+import { auth } from "../auth.js";
 import { SHEET_NAMES } from "../config.js";
 
 let taskViewMode = "kanban"; // 'kanban', 'table', 'daily'
@@ -50,10 +51,12 @@ export function renderTasks(container) {
             <span class="text-xs text-[#698c9f] hidden sm:inline">• Database: '${allTasks.length}' Tugas Tersimpan</span>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="window.confirmClearAllTasks()" class="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 font-semibold transition-colors bg-white px-3 py-1.5 rounded-full border border-rose-200 shadow-2xs hover:bg-rose-50" type="button" title="Kosongkan seluruh tugas pekerjaan">
-              <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
-              <span class="hidden sm:inline">Kosongkan Semua Tugas</span>
-            </button>
+            ${auth.isAdminOrOwner() ? `
+              <button onclick="window.confirmClearAllTasks()" class="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 font-semibold transition-colors bg-white px-3 py-1.5 rounded-full border border-rose-200 shadow-2xs hover:bg-rose-50" type="button" title="Kosongkan seluruh tugas pekerjaan">
+                <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+                <span class="hidden sm:inline">Kosongkan Semua Tugas</span>
+              </button>
+            ` : ''}
             <button onclick="window.triggerCloudSync()" class="flex items-center gap-1.5 text-xs text-[#2c6673] hover:text-[#1e3e50] font-semibold transition-colors shadow-2xs bg-white px-3 py-1.5 rounded-full border border-[#d2e2ec]" type="button">
               <span class="material-symbols-outlined text-[16px]">sync</span>
               <span>Sinkron Data</span>
@@ -618,11 +621,20 @@ function setupTaskListeners(container) {
     document.getElementById("task-form-deadline").value = task.deadline || "";
     document.getElementById("task-form-desc").value = task.description || "";
     document.getElementById("modal-task-title-text").textContent = `Edit Tugas #${task.task_id}`;
-    document.getElementById("btn-task-delete-in-modal")?.classList.remove("hidden");
+    if (auth.isAdminOrOwner()) {
+      document.getElementById("btn-task-delete-in-modal")?.classList.remove("hidden");
+    } else {
+      document.getElementById("btn-task-delete-in-modal")?.classList.add("hidden");
+    }
     document.getElementById("modal-task-manage")?.classList.remove("hidden");
   };
 
   window.confirmDeleteTask = (taskId) => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus tugas.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk menghapus tugas.");
+      return;
+    }
     if (confirm(`Apakah Anda yakin ingin menghapus tugas #${taskId}? Tindakan ini akan menghapusnya dari papan kerja dan database.`)) {
       store.deleteItem(SHEET_NAMES.CONTENT_TASKS, taskId);
       if (window.showToast) window.showToast(`🗑️ Tugas #${taskId} berhasil dihapus.`, "info");
@@ -641,6 +653,11 @@ function setupTaskListeners(container) {
   };
 
   window.confirmClearAllTasks = () => {
+    if (!auth.isAdminOrOwner()) {
+      if (window.showToast) window.showToast("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk mengosongkan tugas.", "error");
+      else alert("⛔ Akses Terbatas: Hanya Owner dan Admin yang memiliki izin untuk mengosongkan tugas.");
+      return;
+    }
     if (confirm("⚠️ PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SEMUA TUGAS pekerjaan?\n\nPapan tugas akan dikosongkan secara bersih sehingga Anda dapat mulai menginput pekerjaan asli studio Anda.")) {
       store.clearAllTasks();
       if (window.showToast) window.showToast("🧹 Seluruh data tugas pekerjaan berhasil dikosongkan!", "success");
