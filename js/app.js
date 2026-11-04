@@ -343,6 +343,8 @@ class App {
   shouldSkipViewReRender() {
     const userModal = document.getElementById("modal-user-manage");
     const isUserModalOpen = Boolean(userModal && !userModal.classList.contains("hidden"));
+    const taskModal = document.getElementById("modal-task-manage");
+    const isTaskModalOpen = Boolean(taskModal && !taskModal.classList.contains("hidden"));
     const isBackdropModalOpen = Boolean(document.querySelector(".modal-backdrop:not(.hidden)"));
     const globalModalContainer = document.getElementById("global-modal-container");
     const isGlobalModalOpen = Boolean(globalModalContainer && globalModalContainer.children.length > 0);
@@ -355,7 +357,7 @@ class App {
       )
     );
 
-    return isUserModalOpen || isBackdropModalOpen || isGlobalModalOpen || isUserTyping;
+    return isUserModalOpen || isTaskModalOpen || isBackdropModalOpen || isGlobalModalOpen || isUserTyping;
   }
 
   handleRoute() {
@@ -379,6 +381,10 @@ class App {
     let hash = rawHash;
 
     // Aliases
+    if (hash === "profile") {
+      setActiveSettingsTab("profile");
+      hash = "settings";
+    }
     if (hash === "ideas") hash = "content";
     if (hash === "goals") hash = "targets";
     if (hash === "assets") hash = "media";

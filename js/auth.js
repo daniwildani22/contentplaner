@@ -131,6 +131,8 @@ class AuthManager {
   hasPermission(moduleKey) {
     if (!this.currentUser) return false;
     if (this.isOwner()) return true;
+    // Modul profil & pengaturan akun selalu dapat diakses oleh semua anggota agar dapat mengupload foto profil dan memperbarui profil mereka sendiri
+    if (moduleKey === "settings" || moduleKey === "profile") return true;
     const perms = this.currentUser.permissions || [];
     if (perms.includes("all")) return true;
     return perms.includes(moduleKey);

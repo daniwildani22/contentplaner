@@ -299,11 +299,12 @@ export function renderTasks(container) {
               ${filteredTasks.length > 0 ? filteredTasks.map(t => {
                 const authorUser = users.find(u => u.user_id === t.assigned_user || u.name === t.assigned_user);
                 const brandItem = brands.find(b => b.brand_id === t.brand_id);
+                const displayDeadline = t.deadline ? (String(t.deadline).includes("T") ? String(t.deadline).split("T")[0] : t.deadline) : "Hari ini";
                 return `
                   <tr class="hover:bg-[#f8fbfe] transition">
                     <td class="p-3.5 font-bold">
                       <span class="font-mono text-[10px] text-[#2c6673] bg-[#eaf2f7] px-1.5 py-0.5 rounded mr-1.5">#${t.task_id}</span>
-                      <span>${t.task_title}</span>
+                      <span>${t.task_title || t.task_name || t.title || 'Tugas Pekerjaan'}</span>
                     </td>
                     <td class="p-3.5 text-[#5c7786]">${t.brand_name || brandItem?.brand_name || 'Self-Project'}</td>
                     <td class="p-3.5 font-medium">${authorUser?.name || t.assigned_user || 'Rian Pratama'}</td>
@@ -320,7 +321,7 @@ export function renderTasks(container) {
                         <span class="text-[11px] font-semibold text-[#1e3e50]">${t.progress || 0}%</span>
                       </div>
                     </td>
-                    <td class="p-3.5 text-[#5c7786]">${t.deadline || 'Hari ini'}</td>
+                    <td class="p-3.5 text-[#5c7786]">${displayDeadline}</td>
                     <td class="p-3.5">
                       <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-[#edf4f8] text-[#1e3e50]">${t.status || 'To Do'}</span>
                     </td>
@@ -329,9 +330,11 @@ export function renderTasks(container) {
                         <button onclick="window.openEditTaskModal('${t.task_id}')" class="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition" title="Edit Tugas">
                           <span class="material-symbols-outlined text-[16px]">edit</span>
                         </button>
-                        <button onclick="window.confirmDeleteTask('${t.task_id}')" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas">
-                          <span class="material-symbols-outlined text-[16px]">delete</span>
-                        </button>
+                        ${auth.isAdminOrOwner() ? `
+                          <button onclick="window.confirmDeleteTask('${t.task_id}')" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas">
+                            <span class="material-symbols-outlined text-[16px]">delete</span>
+                          </button>
+                        ` : ''}
                       </div>
                     </td>
                   </tr>
@@ -378,13 +381,14 @@ export function renderTasks(container) {
                 <label class="block font-bold text-slate-700 mb-1">Brand / Klien</label>
                 <select id="task-form-brand" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-medium">
                   <option value="">Self-Project</option>
-                  ${brands.map(b => `<option value="${b.brand_name}">${b.brand_name}</option>`).join('')}
+                  ${brands.map(b => `<option value="${b.brand_id}">${b.brand_name}</option>`).join('')}
                 </select>
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Penanggung Jawab (PIC)</label>
                 <select id="task-form-pic" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-medium">
-                  ${users.map(u => `<option value="${u.name}">${u.name} (${u.role})</option>`).join('')}
+                  <option value="">-- Belum Ditugaskan --</option>
+                  ${users.map(u => `<option value="${u.user_id}">${u.name} (${u.role})</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -411,7 +415,7 @@ export function renderTasks(container) {
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Deadline</label>
-                <input type="text" id="task-form-deadline" placeholder="Besok / 20 Nov" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-medium">
+                <input type="date" id="task-form-deadline" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-medium text-xs">
               </div>
             </div>
 
@@ -459,6 +463,7 @@ function renderKanbanCard(task, allSubtasks, brands, users, isSpotlight = false)
   const subDone = subtasks.filter(s => s.status === "Completed" || s.is_done).length;
   const subTotal = subtasks.length;
   const progress = subTotal > 0 ? Math.round((subDone / subTotal) * 100) : (task.progress || 0);
+  const displayDeadline = task.deadline ? (String(task.deadline).includes("T") ? String(task.deadline).split("T")[0] : task.deadline) : "Hari ini";
 
   return `
     <div class="cursor-pointer group p-3.5 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col gap-2.5 border ${isSpotlight ? 'border-l-4 border-l-[#1e3e50] border-y border-r border-[#cbdfe9] shadow-md' : 'border-[#d4e4ee]'}" onclick="window.openEditTaskModal('${task.task_id}')">
@@ -467,14 +472,16 @@ function renderKanbanCard(task, allSubtasks, brands, users, isSpotlight = false)
         
         <div class="flex items-center gap-1.5">
           <span class="px-2 py-0.5 rounded-full ${priorityClass} font-semibold text-[10px]">${task.priority || 'Normal'}</span>
-          <button type="button" onclick="event.stopPropagation(); window.confirmDeleteTask('${task.task_id}')" class="p-1 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas Ini">
-            <span class="material-symbols-outlined text-[15px]">delete</span>
-          </button>
+          ${auth.isAdminOrOwner() ? `
+            <button type="button" onclick="event.stopPropagation(); window.confirmDeleteTask('${task.task_id}')" class="p-1 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas Ini">
+              <span class="material-symbols-outlined text-[15px]">delete</span>
+            </button>
+          ` : ''}
         </div>
       </div>
 
       <h3 class="font-bold text-sm text-[#1e3e50] group-hover:text-[#2c6673] transition-colors line-clamp-2 leading-snug">
-        ${task.task_title || task.title}
+        ${task.task_title || task.task_name || task.title || 'Tugas Pekerjaan'}
       </h3>
 
       <div class="flex items-center gap-1.5 text-xs text-[#5f8296]">
@@ -499,7 +506,7 @@ function renderKanbanCard(task, allSubtasks, brands, users, isSpotlight = false)
         </div>
         <span class="text-[11px] flex items-center gap-1 ${task.priority === 'Urgent' ? 'text-[#c53030] font-semibold' : 'text-[#698d9f]'}">
           <span class="material-symbols-outlined text-[13px]">schedule</span>
-          <span>${task.deadline || 'Hari ini'}</span>
+          <span>${displayDeadline}</span>
         </span>
       </div>
 
@@ -545,39 +552,41 @@ function setupTaskListeners(container) {
     e.preventDefault();
     const taskId = document.getElementById("task-form-id")?.value;
     const title = document.getElementById("task-form-title")?.value?.trim();
-    const brandName = document.getElementById("task-form-brand")?.value;
-    const assignedUser = document.getElementById("task-form-pic")?.value;
-    const priority = document.getElementById("task-form-priority")?.value;
-    const status = document.getElementById("task-form-status")?.value;
-    const deadline = document.getElementById("task-form-deadline")?.value?.trim();
-    const description = document.getElementById("task-form-desc")?.value?.trim();
+    const brandId = document.getElementById("task-form-brand")?.value || null;
+    const assignedUser = document.getElementById("task-form-pic")?.value || null;
+    const priority = document.getElementById("task-form-priority")?.value || "Normal";
+    const status = document.getElementById("task-form-status")?.value || "To Do";
+    const deadlineVal = document.getElementById("task-form-deadline")?.value?.trim() || new Date().toISOString().slice(0, 10);
+    const description = document.getElementById("task-form-desc")?.value?.trim() || "";
 
     if (!title) return;
 
+    const allBrands = store.getItems(SHEET_NAMES.BRANDS) || [];
+    const matchedBrand = allBrands.find(b => b.brand_id === brandId || b.brand_name === brandId);
+    const brandName = matchedBrand ? matchedBrand.brand_name : "Self-Project";
+    const finalBrandId = matchedBrand ? matchedBrand.brand_id : (brandId && String(brandId).startsWith("BRD-") ? brandId : null);
+
+    const taskPayload = {
+      task_title: title,
+      task_name: title,
+      brand_id: finalBrandId,
+      brand_name: brandName,
+      assigned_user: assignedUser || null,
+      priority: priority,
+      status: status,
+      deadline: deadlineVal,
+      description: description,
+      notes: description
+    };
+
     if (taskId) {
       // Edit existing
-      store.updateItem(SHEET_NAMES.CONTENT_TASKS, taskId, {
-        task_title: title,
-        brand_name: brandName,
-        assigned_user: assignedUser,
-        priority: priority,
-        status: status,
-        deadline: deadline || "Hari ini",
-        description: description
-      });
+      store.updateItem(SHEET_NAMES.CONTENT_TASKS, taskId, taskPayload);
       if (window.showToast) window.showToast("✅ Tugas berhasil diperbarui!", "success");
     } else {
       // Create new
-      store.createItem(SHEET_NAMES.CONTENT_TASKS, {
-        task_title: title,
-        brand_name: brandName,
-        assigned_user: assignedUser,
-        priority: priority,
-        status: status,
-        deadline: deadline || "Hari ini",
-        description: description,
-        progress: status === "Completed" ? 100 : 0
-      });
+      taskPayload.progress = status === "Completed" ? 100 : 0;
+      store.createItem(SHEET_NAMES.CONTENT_TASKS, taskPayload);
       if (window.showToast) window.showToast("✅ Tugas baru berhasil ditambahkan!", "success");
     }
 
@@ -596,13 +605,30 @@ function setupTaskListeners(container) {
 
   // Global window functions
   window.openCreateTaskModal = (initialStatus = "To Do") => {
-    document.getElementById("task-form-id").value = "";
-    document.getElementById("task-form-title").value = "";
-    document.getElementById("task-form-status").value = initialStatus;
-    document.getElementById("task-form-priority").value = "Normal";
-    document.getElementById("task-form-deadline").value = "";
-    document.getElementById("task-form-desc").value = "";
-    document.getElementById("modal-task-title-text").textContent = "Buat Tugas Baru";
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const idEl = document.getElementById("task-form-id");
+    const titleEl = document.getElementById("task-form-title");
+    const brandEl = document.getElementById("task-form-brand");
+    const picEl = document.getElementById("task-form-pic");
+    const statusEl = document.getElementById("task-form-status");
+    const priorityEl = document.getElementById("task-form-priority");
+    const deadlineEl = document.getElementById("task-form-deadline");
+    const descEl = document.getElementById("task-form-desc");
+
+    if (idEl) idEl.value = "";
+    if (titleEl) titleEl.value = "";
+    if (brandEl) brandEl.value = "";
+    if (picEl) {
+      const curUser = auth.getCurrentUser();
+      picEl.value = curUser ? curUser.user_id : "";
+    }
+    if (statusEl) statusEl.value = initialStatus;
+    if (priorityEl) priorityEl.value = "Normal";
+    if (deadlineEl) deadlineEl.value = todayStr;
+    if (descEl) descEl.value = "";
+
+    const titleText = document.getElementById("modal-task-title-text");
+    if (titleText) titleText.textContent = "Buat Tugas Baru";
     document.getElementById("btn-task-delete-in-modal")?.classList.add("hidden");
     document.getElementById("modal-task-manage")?.classList.remove("hidden");
   };
@@ -612,15 +638,37 @@ function setupTaskListeners(container) {
     const task = allTasks.find(t => t.task_id === taskId);
     if (!task) return;
 
-    document.getElementById("task-form-id").value = task.task_id;
-    document.getElementById("task-form-title").value = task.task_title || task.title || "";
-    document.getElementById("task-form-brand").value = task.brand_name || "";
-    document.getElementById("task-form-pic").value = task.assigned_user || "";
-    document.getElementById("task-form-status").value = task.status || "To Do";
-    document.getElementById("task-form-priority").value = task.priority || "Normal";
-    document.getElementById("task-form-deadline").value = task.deadline || "";
-    document.getElementById("task-form-desc").value = task.description || "";
-    document.getElementById("modal-task-title-text").textContent = `Edit Tugas #${task.task_id}`;
+    const idEl = document.getElementById("task-form-id");
+    const titleEl = document.getElementById("task-form-title");
+    const brandEl = document.getElementById("task-form-brand");
+    const picEl = document.getElementById("task-form-pic");
+    const statusEl = document.getElementById("task-form-status");
+    const priorityEl = document.getElementById("task-form-priority");
+    const deadlineEl = document.getElementById("task-form-deadline");
+    const descEl = document.getElementById("task-form-desc");
+
+    if (idEl) idEl.value = task.task_id;
+    if (titleEl) titleEl.value = task.task_title || task.task_name || task.title || "";
+    if (brandEl) brandEl.value = task.brand_id || "";
+    if (picEl) {
+      const allUsers = store.getItems(SHEET_NAMES.USERS) || [];
+      const matchedU = allUsers.find(u => u.user_id === task.assigned_user || u.name === task.assigned_user);
+      picEl.value = matchedU ? matchedU.user_id : (task.assigned_user || "");
+    }
+    if (statusEl) statusEl.value = task.status || "To Do";
+    if (priorityEl) priorityEl.value = task.priority || "Normal";
+    if (deadlineEl) {
+      let dVal = task.deadline || "";
+      if (dVal && dVal.length >= 10 && dVal.includes("-")) {
+        dVal = dVal.slice(0, 10);
+      }
+      deadlineEl.value = dVal;
+    }
+    if (descEl) descEl.value = task.description || task.notes || "";
+
+    const titleText = document.getElementById("modal-task-title-text");
+    if (titleText) titleText.textContent = `Edit Tugas #${task.task_id}`;
+
     if (auth.isAdminOrOwner()) {
       document.getElementById("btn-task-delete-in-modal")?.classList.remove("hidden");
     } else {

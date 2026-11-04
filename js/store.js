@@ -1117,3 +1117,6 @@ class Store {
 }
 
 export const store = new Store();
+if (typeof window !== "undefined") {
+  window.store = store;
+}

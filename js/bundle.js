@@ -1,7 +1,7 @@
 ﻿/**
  * ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER - COMPLETE APPLICATION BUNDLE
  * Standalone Zero-Dependency Build (Works directly via file:/// and http://)
- * Generated: 2026-11-04 13:57:07
+ * Generated: 2026-11-04 14:42:23
  */
 (function(window, document) {
 'use strict';
@@ -433,7 +433,62 @@ class SupabaseManager {
     // 2. Pemetaan & Sinkronisasi Alias Kolom (Aplikasi vs Skema Database PostgreSQL)
     if (sheetName === SHEET_NAMES.CONTENT_TASKS) {
       clean.task_name = clean.task_title || clean.task_name || clean.title || "Tugas Pekerjaan";
-      clean.task_title = clean.task_name;
+      if (!clean.notes && clean.description) clean.notes = clean.description;
+      if (!clean.description && clean.notes) clean.description = clean.notes;
+
+      // Pastikan assigned_user valid ke user_id yang ada di tabel users (mencegah error foreign key 23503)
+      if (clean.assigned_user) {
+        let matchedUserId = null;
+        if (typeof window !== "undefined" && window.store) {
+          const users = window.store.getItems(SHEET_NAMES.USERS) || [];
+          const foundUser = users.find(u => u.user_id === clean.assigned_user || u.name === clean.assigned_user);
+          if (foundUser) matchedUserId = foundUser.user_id;
+        }
+        if (!matchedUserId && String(clean.assigned_user).startsWith("USR-")) {
+          matchedUserId = clean.assigned_user;
+        }
+        clean.assigned_user = matchedUserId || null;
+      }
+
+      // Pastikan brand_id valid ke tabel brands (mencegah error foreign key 23503)
+      if (clean.brand_id) {
+        let matchedBrandId = null;
+        if (typeof window !== "undefined" && window.store) {
+          const brands = window.store.getItems(SHEET_NAMES.BRANDS) || [];
+          const foundBrand = brands.find(b => b.brand_id === clean.brand_id || b.brand_name === clean.brand_id);
+          if (foundBrand) matchedBrandId = foundBrand.brand_id;
+        }
+        if (!matchedBrandId && String(clean.brand_id).startsWith("BRD-")) {
+          matchedBrandId = clean.brand_id;
+        }
+        clean.brand_id = matchedBrandId || null;
+      }
+
+      // Pastikan content_id valid ke content_planning jika ada
+      if (clean.content_id) {
+        let matchedContentId = null;
+        if (typeof window !== "undefined" && window.store) {
+          const contents = window.store.getItems(SHEET_NAMES.CONTENT_PLANNING) || [];
+          const foundContent = contents.find(c => c.content_id === clean.content_id);
+          if (foundContent) matchedContentId = foundContent.content_id;
+        }
+        if (!matchedContentId && String(clean.content_id).startsWith("CNT-")) {
+          matchedContentId = clean.content_id;
+        }
+        clean.content_id = matchedContentId || null;
+      }
+
+      // Validasi deadline: harus ISO string atau null (mencegah error invalid input syntax Postgres 22007)
+      if (clean.deadline) {
+        const d = new Date(clean.deadline);
+        if (isNaN(d.getTime())) {
+          clean.deadline = null;
+        } else {
+          clean.deadline = clean.deadline.includes("T") ? clean.deadline : `${clean.deadline}T00:00:00.000Z`;
+        }
+      } else {
+        clean.deadline = null;
+      }
     } else if (sheetName === SHEET_NAMES.CONTENT_PLANNING) {
       if (clean.hook && !clean.hook_3sec) clean.hook_3sec = clean.hook;
       if (clean.hook_3sec && !clean.hook) clean.hook = clean.hook_3sec;
@@ -477,6 +532,24 @@ class SupabaseManager {
     if (sheetName === SHEET_NAMES.CONTENT_TASKS) {
       if (!item.task_title && item.task_name) item.task_title = item.task_name;
       if (!item.title && item.task_name) item.title = item.task_name;
+      if (!item.description && item.notes) item.description = item.notes;
+      if (!item.notes && item.description) item.notes = item.description;
+
+      // Normalisasi format deadline untuk tampilan frontend: YYYY-MM-DD
+      if (item.deadline) {
+        try {
+          const dStr = String(item.deadline);
+          if (dStr.includes("T")) item.deadline = dStr.split("T")[0];
+          else if (dStr.length > 10) item.deadline = dStr.slice(0, 10);
+        } catch (e) {}
+      }
+
+      // Sinkronkan brand_name jika belum terisi
+      if (item.brand_id && !item.brand_name && typeof window !== "undefined" && window.store) {
+        const brands = window.store.getItems(SHEET_NAMES.BRANDS) || [];
+        const b = brands.find(x => x.brand_id === item.brand_id);
+        if (b) item.brand_name = b.brand_name;
+      }
     } else if (sheetName === SHEET_NAMES.CONTENT_PLANNING) {
       if (!item.hook && item.hook_3sec) item.hook = item.hook_3sec;
     } else if (sheetName === SHEET_NAMES.CONTENT_CALENDAR) {
@@ -513,7 +586,25 @@ class SupabaseManager {
           if (!error && Array.isArray(data)) {
             // Normalisasi data dari Supabase ke state store
             const normalized = data.map(row => this.normalizeFromSupabase(sheetName, row));
-            storeInstance.replaceSheetData(sheetName, normalized);
+
+            // Perlindungan data baru: Cek apakah ada data lokal yang baru dibuat (< 15 detik lalu) yang belum sempat tersimpan di Supabase
+            const currentLocal = storeInstance.getItems(sheetName) || [];
+            const now = Date.now();
+            const pk = PK_MAP[tableName] || "id";
+            const remotePks = new Set(normalized.map(r => String(r[pk])));
+
+            const pendingLocal = currentLocal.filter(localItem => {
+              if (remotePks.has(String(localItem[pk]))) return false;
+              if (localItem.created_at) {
+                const itemAge = now - new Date(localItem.created_at).getTime();
+                return itemAge < 15000; // Kurang dari 15 detik lalu
+              }
+              return false;
+            });
+
+            // Gabungkan remote data dengan item lokal yang masih sangat baru
+            const merged = [...pendingLocal, ...normalized];
+            storeInstance.replaceSheetData(sheetName, merged);
             totalFetched++;
           } else if (error) {
             console.warn(`[Supabase fetchAll error on ${tableName}]:`, error.message);
@@ -538,42 +629,102 @@ class SupabaseManager {
     if (!tableName) return;
     const pk = PK_MAP[tableName] || "id";
 
-    try {
-      if (action === "create" || action === "insert") {
-        let payload = this.normalizeForSupabase(sheetName, item);
-        let res = await this.client.from(tableName).upsert(payload);
-        
-        // Resilient fallback jika terdapat kolom yang belum terdefinisi di skema Supabase
-        if (res.error && res.error.code === "PGRST204" && res.error.message) {
+    // Helper untuk menangani retry adaptif
+    const executeWithRetry = async (runOperation, getPayload) => {
+      let payload = { ...getPayload() };
+      let res = await runOperation(payload);
+      let maxAttempts = 8;
+
+      while (res.error && maxAttempts > 0) {
+        maxAttempts--;
+        let recovered = false;
+
+        // 1. Tangani kolom tidak ditemukan di tabel PostgreSQL Supabase (PGRST204)
+        if (res.error.code === "PGRST204" || (res.error.message && res.error.message.includes("Could not find the"))) {
           const match = res.error.message.match(/Could not find the '([^']+)' column/);
-          if (match && match[1]) {
+          if (match && match[1] && payload[match[1]] !== undefined) {
             console.warn(`[Supabase Schema Fallback] Kolom '${match[1]}' belum ada di tabel '${tableName}', menyimpan tanpa kolom tersebut...`);
             delete payload[match[1]];
-            res = await this.client.from(tableName).upsert(payload);
+            res = await runOperation(payload);
+            recovered = true;
           }
         }
+
+        // 2. Tangani Foreign Key Violation (23503)
+        if (!recovered && (res.error.code === "23503" || (res.error.message && res.error.message.toLowerCase().includes("foreign key")))) {
+          console.warn(`[Supabase FK Fallback] Foreign key constraint error pada '${tableName}':`, res.error.message);
+          let modified = false;
+          const fkCandidates = ["assigned_user", "brand_id", "content_id", "project_id", "campaign_id", "client_id", "user_id"];
+          for (const fk of fkCandidates) {
+            if (payload[fk] !== null && payload[fk] !== undefined) {
+              if (res.error.message.includes(fk) || (res.error.details && res.error.details.includes(fk))) {
+                payload[fk] = null;
+                modified = true;
+                break;
+              }
+            }
+          }
+          if (!modified) {
+            if (payload.assigned_user) { payload.assigned_user = null; modified = true; }
+            else if (payload.brand_id) { payload.brand_id = null; modified = true; }
+            else if (payload.content_id) { payload.content_id = null; modified = true; }
+          }
+          if (modified) {
+            res = await runOperation(payload);
+            recovered = true;
+          }
+        }
+
+        // 3. Tangani Invalid Timestamp / Date (22007)
+        if (!recovered && (res.error.code === "22007" || (res.error.message && res.error.message.toLowerCase().includes("timestamp")))) {
+          console.warn(`[Supabase Date Fallback] Format timestamp error pada '${tableName}':`, res.error.message);
+          let modified = false;
+          const dateFields = ["deadline", "start_date", "end_date", "publication_date", "publish_date", "shooting_date", "production_date", "upload_date", "date"];
+          for (const df of dateFields) {
+            if (payload[df] !== null && payload[df] !== undefined) {
+              payload[df] = null;
+              modified = true;
+            }
+          }
+          if (modified) {
+            res = await runOperation(payload);
+            recovered = true;
+          }
+        }
+
+        if (!recovered) {
+          break; // Tidak dapat di-recover otomatis
+        }
+      }
+
+      return res;
+    };
+
+    try {
+      if (action === "create" || action === "insert") {
+        const payload = this.normalizeForSupabase(sheetName, item);
+        const res = await executeWithRetry(
+          (p) => this.client.from(tableName).upsert(p),
+          () => payload
+        );
 
         if (res.error) {
           console.warn(`[Supabase autoSave INSERT error on ${tableName}]:`, res.error.message, res.error.details);
         } else {
-          console.log(`[Supabase autoSave] Sukses simpan ke ${tableName}`);
+          console.log(`[Supabase autoSave] Sukses simpan ke ${tableName} (ID: ${item[pk]})`);
         }
       } else if (action === "update") {
         const targetId = id || item[pk];
-        let payload = this.normalizeForSupabase(sheetName, item);
-        let res = await this.client.from(tableName).update(payload).eq(pk, targetId);
-
-        if (res.error && res.error.code === "PGRST204" && res.error.message) {
-          const match = res.error.message.match(/Could not find the '([^']+)' column/);
-          if (match && match[1]) {
-            console.warn(`[Supabase Schema Fallback] Kolom '${match[1]}' belum ada di tabel '${tableName}', memperbarui tanpa kolom tersebut...`);
-            delete payload[match[1]];
-            res = await this.client.from(tableName).update(payload).eq(pk, targetId);
-          }
-        }
+        const payload = this.normalizeForSupabase(sheetName, item);
+        const res = await executeWithRetry(
+          (p) => this.client.from(tableName).update(p).eq(pk, targetId),
+          () => payload
+        );
 
         if (res.error) {
           console.warn(`[Supabase autoSave UPDATE error on ${tableName}]:`, res.error.message);
+        } else {
+          console.log(`[Supabase autoSave] Sukses update ke ${tableName} (ID: ${targetId})`);
         }
       } else if (action === "delete") {
         const targetId = id || (item ? item[pk] : null);
@@ -1795,6 +1946,9 @@ class Store {
   }
 }
 const store = new Store();
+if (typeof window !== "undefined") {
+  window.store = store;
+}
 
 
 // 4. API CLIENT
@@ -2224,6 +2378,8 @@ class AuthManager {
   hasPermission(moduleKey) {
     if (!this.currentUser) return false;
     if (this.isOwner()) return true;
+    // Modul profil & pengaturan akun selalu dapat diakses oleh semua anggota agar dapat mengupload foto profil dan memperbarui profil mereka sendiri
+    if (moduleKey === "settings" || moduleKey === "profile") return true;
     const perms = this.currentUser.permissions || [];
     if (perms.includes("all")) return true;
     return perms.includes(moduleKey);
@@ -4035,11 +4191,12 @@ function renderTasks(container) {
               ${filteredTasks.length > 0 ? filteredTasks.map(t => {
                 const authorUser = users.find(u => u.user_id === t.assigned_user || u.name === t.assigned_user);
                 const brandItem = brands.find(b => b.brand_id === t.brand_id);
+                const displayDeadline = t.deadline ? (String(t.deadline).includes("T") ? String(t.deadline).split("T")[0] : t.deadline) : "Hari ini";
                 return `
                   <tr class="hover:bg-[#f8fbfe] transition">
                     <td class="p-3.5 font-bold">
                       <span class="font-mono text-[10px] text-[#2c6673] bg-[#eaf2f7] px-1.5 py-0.5 rounded mr-1.5">#${t.task_id}</span>
-                      <span>${t.task_title}</span>
+                      <span>${t.task_title || t.task_name || t.title || 'Tugas Pekerjaan'}</span>
                     </td>
                     <td class="p-3.5 text-[#5c7786]">${t.brand_name || brandItem?.brand_name || 'Self-Project'}</td>
                     <td class="p-3.5 font-medium">${authorUser?.name || t.assigned_user || 'Rian Pratama'}</td>
@@ -4056,7 +4213,7 @@ function renderTasks(container) {
                         <span class="text-[11px] font-semibold text-[#1e3e50]">${t.progress || 0}%</span>
                       </div>
                     </td>
-                    <td class="p-3.5 text-[#5c7786]">${t.deadline || 'Hari ini'}</td>
+                    <td class="p-3.5 text-[#5c7786]">${displayDeadline}</td>
                     <td class="p-3.5">
                       <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-[#edf4f8] text-[#1e3e50]">${t.status || 'To Do'}</span>
                     </td>
@@ -4065,9 +4222,11 @@ function renderTasks(container) {
                         <button onclick="window.openEditTaskModal('${t.task_id}')" class="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition" title="Edit Tugas">
                           <span class="material-symbols-outlined text-[16px]">edit</span>
                         </button>
-                        <button onclick="window.confirmDeleteTask('${t.task_id}')" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas">
-                          <span class="material-symbols-outlined text-[16px]">delete</span>
-                        </button>
+                        ${auth.isAdminOrOwner() ? `
+                          <button onclick="window.confirmDeleteTask('${t.task_id}')" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas">
+                            <span class="material-symbols-outlined text-[16px]">delete</span>
+                          </button>
+                        ` : ''}
                       </div>
                     </td>
                   </tr>
@@ -4114,13 +4273,14 @@ function renderTasks(container) {
                 <label class="block font-bold text-slate-700 mb-1">Brand / Klien</label>
                 <select id="task-form-brand" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-medium">
                   <option value="">Self-Project</option>
-                  ${brands.map(b => `<option value="${b.brand_name}">${b.brand_name}</option>`).join('')}
+                  ${brands.map(b => `<option value="${b.brand_id}">${b.brand_name}</option>`).join('')}
                 </select>
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Penanggung Jawab (PIC)</label>
                 <select id="task-form-pic" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-medium">
-                  ${users.map(u => `<option value="${u.name}">${u.name} (${u.role})</option>`).join('')}
+                  <option value="">-- Belum Ditugaskan --</option>
+                  ${users.map(u => `<option value="${u.user_id}">${u.name} (${u.role})</option>`).join('')}
                 </select>
               </div>
             </div>
@@ -4147,7 +4307,7 @@ function renderTasks(container) {
               </div>
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Deadline</label>
-                <input type="text" id="task-form-deadline" placeholder="Besok / 20 Nov" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-medium">
+                <input type="date" id="task-form-deadline" class="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-medium text-xs">
               </div>
             </div>
 
@@ -4195,6 +4355,7 @@ function renderKanbanCard(task, allSubtasks, brands, users, isSpotlight = false)
   const subDone = subtasks.filter(s => s.status === "Completed" || s.is_done).length;
   const subTotal = subtasks.length;
   const progress = subTotal > 0 ? Math.round((subDone / subTotal) * 100) : (task.progress || 0);
+  const displayDeadline = task.deadline ? (String(task.deadline).includes("T") ? String(task.deadline).split("T")[0] : task.deadline) : "Hari ini";
 
   return `
     <div class="cursor-pointer group p-3.5 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all flex flex-col gap-2.5 border ${isSpotlight ? 'border-l-4 border-l-[#1e3e50] border-y border-r border-[#cbdfe9] shadow-md' : 'border-[#d4e4ee]'}" onclick="window.openEditTaskModal('${task.task_id}')">
@@ -4203,14 +4364,16 @@ function renderKanbanCard(task, allSubtasks, brands, users, isSpotlight = false)
         
         <div class="flex items-center gap-1.5">
           <span class="px-2 py-0.5 rounded-full ${priorityClass} font-semibold text-[10px]">${task.priority || 'Normal'}</span>
-          <button type="button" onclick="event.stopPropagation(); window.confirmDeleteTask('${task.task_id}')" class="p-1 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas Ini">
-            <span class="material-symbols-outlined text-[15px]">delete</span>
-          </button>
+          ${auth.isAdminOrOwner() ? `
+            <button type="button" onclick="event.stopPropagation(); window.confirmDeleteTask('${task.task_id}')" class="p-1 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus Tugas Ini">
+              <span class="material-symbols-outlined text-[15px]">delete</span>
+            </button>
+          ` : ''}
         </div>
       </div>
 
       <h3 class="font-bold text-sm text-[#1e3e50] group-hover:text-[#2c6673] transition-colors line-clamp-2 leading-snug">
-        ${task.task_title || task.title}
+        ${task.task_title || task.task_name || task.title || 'Tugas Pekerjaan'}
       </h3>
 
       <div class="flex items-center gap-1.5 text-xs text-[#5f8296]">
@@ -4235,7 +4398,7 @@ function renderKanbanCard(task, allSubtasks, brands, users, isSpotlight = false)
         </div>
         <span class="text-[11px] flex items-center gap-1 ${task.priority === 'Urgent' ? 'text-[#c53030] font-semibold' : 'text-[#698d9f]'}">
           <span class="material-symbols-outlined text-[13px]">schedule</span>
-          <span>${task.deadline || 'Hari ini'}</span>
+          <span>${displayDeadline}</span>
         </span>
       </div>
 
@@ -4281,39 +4444,41 @@ function setupTaskListeners(container) {
     e.preventDefault();
     const taskId = document.getElementById("task-form-id")?.value;
     const title = document.getElementById("task-form-title")?.value?.trim();
-    const brandName = document.getElementById("task-form-brand")?.value;
-    const assignedUser = document.getElementById("task-form-pic")?.value;
-    const priority = document.getElementById("task-form-priority")?.value;
-    const status = document.getElementById("task-form-status")?.value;
-    const deadline = document.getElementById("task-form-deadline")?.value?.trim();
-    const description = document.getElementById("task-form-desc")?.value?.trim();
+    const brandId = document.getElementById("task-form-brand")?.value || null;
+    const assignedUser = document.getElementById("task-form-pic")?.value || null;
+    const priority = document.getElementById("task-form-priority")?.value || "Normal";
+    const status = document.getElementById("task-form-status")?.value || "To Do";
+    const deadlineVal = document.getElementById("task-form-deadline")?.value?.trim() || new Date().toISOString().slice(0, 10);
+    const description = document.getElementById("task-form-desc")?.value?.trim() || "";
 
     if (!title) return;
 
+    const allBrands = store.getItems(SHEET_NAMES.BRANDS) || [];
+    const matchedBrand = allBrands.find(b => b.brand_id === brandId || b.brand_name === brandId);
+    const brandName = matchedBrand ? matchedBrand.brand_name : "Self-Project";
+    const finalBrandId = matchedBrand ? matchedBrand.brand_id : (brandId && String(brandId).startsWith("BRD-") ? brandId : null);
+
+    const taskPayload = {
+      task_title: title,
+      task_name: title,
+      brand_id: finalBrandId,
+      brand_name: brandName,
+      assigned_user: assignedUser || null,
+      priority: priority,
+      status: status,
+      deadline: deadlineVal,
+      description: description,
+      notes: description
+    };
+
     if (taskId) {
       // Edit existing
-      store.updateItem(SHEET_NAMES.CONTENT_TASKS, taskId, {
-        task_title: title,
-        brand_name: brandName,
-        assigned_user: assignedUser,
-        priority: priority,
-        status: status,
-        deadline: deadline || "Hari ini",
-        description: description
-      });
+      store.updateItem(SHEET_NAMES.CONTENT_TASKS, taskId, taskPayload);
       if (window.showToast) window.showToast("✅ Tugas berhasil diperbarui!", "success");
     } else {
       // Create new
-      store.createItem(SHEET_NAMES.CONTENT_TASKS, {
-        task_title: title,
-        brand_name: brandName,
-        assigned_user: assignedUser,
-        priority: priority,
-        status: status,
-        deadline: deadline || "Hari ini",
-        description: description,
-        progress: status === "Completed" ? 100 : 0
-      });
+      taskPayload.progress = status === "Completed" ? 100 : 0;
+      store.createItem(SHEET_NAMES.CONTENT_TASKS, taskPayload);
       if (window.showToast) window.showToast("✅ Tugas baru berhasil ditambahkan!", "success");
     }
 
@@ -4332,13 +4497,30 @@ function setupTaskListeners(container) {
 
   // Global window functions
   window.openCreateTaskModal = (initialStatus = "To Do") => {
-    document.getElementById("task-form-id").value = "";
-    document.getElementById("task-form-title").value = "";
-    document.getElementById("task-form-status").value = initialStatus;
-    document.getElementById("task-form-priority").value = "Normal";
-    document.getElementById("task-form-deadline").value = "";
-    document.getElementById("task-form-desc").value = "";
-    document.getElementById("modal-task-title-text").textContent = "Buat Tugas Baru";
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const idEl = document.getElementById("task-form-id");
+    const titleEl = document.getElementById("task-form-title");
+    const brandEl = document.getElementById("task-form-brand");
+    const picEl = document.getElementById("task-form-pic");
+    const statusEl = document.getElementById("task-form-status");
+    const priorityEl = document.getElementById("task-form-priority");
+    const deadlineEl = document.getElementById("task-form-deadline");
+    const descEl = document.getElementById("task-form-desc");
+
+    if (idEl) idEl.value = "";
+    if (titleEl) titleEl.value = "";
+    if (brandEl) brandEl.value = "";
+    if (picEl) {
+      const curUser = auth.getCurrentUser();
+      picEl.value = curUser ? curUser.user_id : "";
+    }
+    if (statusEl) statusEl.value = initialStatus;
+    if (priorityEl) priorityEl.value = "Normal";
+    if (deadlineEl) deadlineEl.value = todayStr;
+    if (descEl) descEl.value = "";
+
+    const titleText = document.getElementById("modal-task-title-text");
+    if (titleText) titleText.textContent = "Buat Tugas Baru";
     document.getElementById("btn-task-delete-in-modal")?.classList.add("hidden");
     document.getElementById("modal-task-manage")?.classList.remove("hidden");
   };
@@ -4348,15 +4530,37 @@ function setupTaskListeners(container) {
     const task = allTasks.find(t => t.task_id === taskId);
     if (!task) return;
 
-    document.getElementById("task-form-id").value = task.task_id;
-    document.getElementById("task-form-title").value = task.task_title || task.title || "";
-    document.getElementById("task-form-brand").value = task.brand_name || "";
-    document.getElementById("task-form-pic").value = task.assigned_user || "";
-    document.getElementById("task-form-status").value = task.status || "To Do";
-    document.getElementById("task-form-priority").value = task.priority || "Normal";
-    document.getElementById("task-form-deadline").value = task.deadline || "";
-    document.getElementById("task-form-desc").value = task.description || "";
-    document.getElementById("modal-task-title-text").textContent = `Edit Tugas #${task.task_id}`;
+    const idEl = document.getElementById("task-form-id");
+    const titleEl = document.getElementById("task-form-title");
+    const brandEl = document.getElementById("task-form-brand");
+    const picEl = document.getElementById("task-form-pic");
+    const statusEl = document.getElementById("task-form-status");
+    const priorityEl = document.getElementById("task-form-priority");
+    const deadlineEl = document.getElementById("task-form-deadline");
+    const descEl = document.getElementById("task-form-desc");
+
+    if (idEl) idEl.value = task.task_id;
+    if (titleEl) titleEl.value = task.task_title || task.task_name || task.title || "";
+    if (brandEl) brandEl.value = task.brand_id || "";
+    if (picEl) {
+      const allUsers = store.getItems(SHEET_NAMES.USERS) || [];
+      const matchedU = allUsers.find(u => u.user_id === task.assigned_user || u.name === task.assigned_user);
+      picEl.value = matchedU ? matchedU.user_id : (task.assigned_user || "");
+    }
+    if (statusEl) statusEl.value = task.status || "To Do";
+    if (priorityEl) priorityEl.value = task.priority || "Normal";
+    if (deadlineEl) {
+      let dVal = task.deadline || "";
+      if (dVal && dVal.length >= 10 && dVal.includes("-")) {
+        dVal = dVal.slice(0, 10);
+      }
+      deadlineEl.value = dVal;
+    }
+    if (descEl) descEl.value = task.description || task.notes || "";
+
+    const titleText = document.getElementById("modal-task-title-text");
+    if (titleText) titleText.textContent = `Edit Tugas #${task.task_id}`;
+
     if (auth.isAdminOrOwner()) {
       document.getElementById("btn-task-delete-in-modal")?.classList.remove("hidden");
     } else {
@@ -9233,7 +9437,7 @@ return { renderNotifications: renderNotifications };
 })();
 
 // ==================== VIEW: js\views\settings.js ====================
-const { setActiveSettingsTab, renderSettings } = (function() {
+const { compressAndCropAvatar, setActiveSettingsTab, renderSettings } = (function() {
 /**
  * =========================================================================================
  * ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER - VIEW: SETTINGS (MODULE 21)
@@ -9248,6 +9452,53 @@ let activeSettingsTab = (function() {
   try { return localStorage.getItem("active_settings_tab") || "profile"; } catch (e) { return "profile"; }
 })();
 let editingUserId = null; // null for add new user, userId string for editing
+
+/**
+ * Kompresi dan crop foto profil menjadi bujur sangkar (square cover) 256x256
+ * Menghasilkan Data URL JPEG berukuran ringan (~20-35 KB) yang ramah LocalStorage dan Supabase
+ */
+function compressAndCropAvatar(file, targetSize = 256, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith("image/")) {
+      return reject(new Error("File yang dipilih bukan merupakan format gambar yang didukung."));
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Gagal membaca file gambar dari perangkat."));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("File gambar rusak atau tidak dapat diproses."));
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = targetSize;
+          canvas.height = targetSize;
+          const ctx = canvas.getContext("2d");
+
+          const sw = img.naturalWidth || img.width;
+          const sh = img.naturalHeight || img.height;
+          const minDim = Math.min(sw, sh);
+          const sx = (sw - minDim) / 2;
+          const sy = (sh - minDim) / 2;
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
+
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+if (typeof window !== "undefined") {
+  window.compressAndCropAvatar = compressAndCropAvatar;
+}
 function setActiveSettingsTab(tab) {
   if (["cloud", "profile", "data"].includes(tab)) {
     activeSettingsTab = tab;
@@ -9266,6 +9517,11 @@ function renderSettings(container) {
     permissions: ["all"]
   };
 
+  const isAdminOrOwner = auth.isAdminOrOwner();
+  if (!isAdminOrOwner) {
+    activeSettingsTab = "profile";
+  }
+
   const gasUrl = store.getSetting ? store.getSetting("gas_api_url") : "";
   const secretToken = store.getSetting ? store.getSetting("secret_token", "PLANNER_SECRET_TOKEN_2026") : "PLANNER_SECRET_TOKEN_2026";
   const driveFolder = store.getSetting ? store.getSetting("drive_root_folder_id") : "";
@@ -9276,38 +9532,53 @@ function renderSettings(container) {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#d2e2ec] shadow-sm">
         <div>
           <div class="flex items-center gap-2">
-            <span class="text-xs font-bold uppercase tracking-wider text-[#2c6673] bg-[#e3f4f8] px-2.5 py-1 rounded-md">Modul 21</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-[#2c6673] bg-[#e3f4f8] px-2.5 py-1 rounded-md">Profil Pengguna</span>
             <span class="text-xs text-slate-400">•</span>
-            <span class="text-xs font-bold text-[#5c7786]">Pengaturan &amp; Sistem</span>
+            <span class="text-xs font-bold text-[#5c7786]">${currentUser.name} (${currentUser.role})</span>
           </div>
-          <h1 class="text-2xl font-extrabold text-[#143242] mt-1 tracking-tight">Application Settings &amp; Cloud Sync</h1>
-          <p class="text-xs text-[#5c7786] mt-0.5">Konfigurasi REST API Google Apps Script, profil tim, manajemen hak akses (RBAC), dan backup database.</p>
+          <h1 class="text-2xl font-extrabold text-[#143242] mt-1 tracking-tight">
+            ${isAdminOrOwner ? 'Application Settings &amp; Cloud Sync' : 'Profil Akun &amp; Foto Pengguna'}
+          </h1>
+          <p class="text-xs text-[#5c7786] mt-0.5">
+            ${isAdminOrOwner ? 'Konfigurasi integrasi cloud Supabase, profil tim studio, hak akses (RBAC), dan backup database.' : 'Ubah foto profil dari galeri / kamera perangkat Anda, perbarui nama, bio, dan kata sandi login.'}
+          </p>
         </div>
 
-        <button onclick="window.triggerCloudSync()" class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#1e3e50] hover:bg-[#2c6673] text-white text-xs font-semibold shadow-sm transition">
-          <span class="material-symbols-outlined text-[16px]">sync</span>
-          <span>Tarik Data Sheets Sekarang</span>
-        </button>
+        ${isAdminOrOwner ? `
+          <button onclick="window.triggerCloudSync()" class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#1e3e50] hover:bg-[#2c6673] text-white text-xs font-semibold shadow-sm transition">
+            <span class="material-symbols-outlined text-[16px]">sync</span>
+            <span>Tarik Data Sheets Sekarang</span>
+          </button>
+        ` : `
+          <button type="button" onclick="window.handleAppLogout()" class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold shadow-2xs border border-rose-200 transition">
+            <span class="material-symbols-outlined text-[16px]">logout</span>
+            <span>Keluar / Logout</span>
+          </button>
+        `}
       </div>
 
       <!-- Settings Navigation Tabs -->
       <div class="flex items-center gap-2 border-b border-[#cbdfe9] pb-2 overflow-x-auto">
-        <button id="tab-set-cloud" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'cloud' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
-          🌐 Integrasi Cloud (Supabase &amp; Sheets)
-        </button>
+        ${isAdminOrOwner ? `
+          <button id="tab-set-cloud" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'cloud' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
+            🌐 Integrasi Cloud (Supabase &amp; Sheets)
+          </button>
+        ` : ''}
         <button id="tab-set-profile" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'profile' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
-          👤 Profil Pengguna &amp; Hak Akses Tim (${users.length})
+          👤 Profil Pengguna ${isAdminOrOwner ? `&amp; Hak Akses Tim (${users.length})` : 'Saya'}
         </button>
-        <button id="tab-set-data" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'data' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
-          💾 Manajemen Data &amp; Backup JSON
-        </button>
+        ${isAdminOrOwner ? `
+          <button id="tab-set-data" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'data' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
+            💾 Manajemen Data &amp; Backup JSON
+          </button>
+        ` : ''}
       </div>
 
       <!-- Tab Content Area -->
       <div id="settings-tab-content">
-        ${activeSettingsTab === "cloud" ? renderCloudTab(gasUrl, secretToken, driveFolder) :
-          activeSettingsTab === "profile" ? renderProfileTab(currentUser, users) :
-          renderDataTab()}
+        ${activeSettingsTab === "cloud" && isAdminOrOwner ? renderCloudTab(gasUrl, secretToken, driveFolder) :
+          activeSettingsTab === "data" && isAdminOrOwner ? renderDataTab() :
+          renderProfileTab(currentUser, users)}
       </div>
     </div>
   `;
@@ -9499,9 +9770,15 @@ function renderProfileTab(currentUser, users) {
       <div class="bg-white p-6 sm:p-7 rounded-3xl border border-[#d2e2ec] shadow-sm space-y-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
           <div class="flex items-center gap-4">
-            <div class="relative group">
-              <img id="preview-avatar-img" src="${currentUser.avatar || presetAvatars[0]}" alt="${currentUser.name}" class="w-16 h-16 rounded-2xl object-cover ring-2 ring-[#1e3e50] shadow-md">
-              <span class="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-[#38b2ac] border-2 border-white"></span>
+            <div class="relative group cursor-pointer" onclick="document.getElementById('prof-upload-file')?.click()" title="Klik untuk upload foto profil dari perangkat">
+              <img id="preview-avatar-img" src="${currentUser.avatar || presetAvatars[0]}" alt="${currentUser.name}" class="w-20 h-20 rounded-2xl object-cover ring-2 ring-[#1e3e50] shadow-md transition-all group-hover:brightness-90">
+              <div class="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
+                <span class="material-symbols-outlined text-[22px]">photo_camera</span>
+                <span>Ganti Foto</span>
+              </div>
+              <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#38b2ac] border-2 border-white flex items-center justify-center text-white" title="Status Online">
+                <span class="w-2 h-2 rounded-full bg-white"></span>
+              </span>
             </div>
             <div>
               <h3 class="font-extrabold text-lg text-[#143242] leading-tight">${currentUser.name}</h3>
@@ -9512,16 +9789,28 @@ function renderProfileTab(currentUser, users) {
                 <span class="text-xs text-slate-400">•</span>
                 <span class="text-xs font-mono text-[#5c7786]">@${currentUser.username || 'user'}</span>
               </div>
+              <p class="text-xs text-slate-500 mt-1">${currentUser.bio || 'Anggota Tim Studio'}</p>
             </div>
           </div>
 
-          <div class="text-xs text-slate-500 font-medium">
-            <span>Sesi Aktif: <strong>${currentUser.email || '-'}</strong></span>
+          <div class="flex flex-col sm:items-end gap-1.5">
+            <label for="prof-upload-file" class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#e3f4f8] hover:bg-[#d0ebf3] text-[#1b6274] font-bold text-xs cursor-pointer transition shadow-2xs border border-[#b6dce7]">
+              <span class="material-symbols-outlined text-[19px]">add_a_photo</span>
+              <span>Upload Foto dari Perangkat Ini</span>
+              <input type="file" id="prof-upload-file" accept="image/*" class="hidden">
+            </label>
+            <span class="text-[10.5px] text-slate-400">Pilih dari Galeri HP / Kamera / Komputer</span>
           </div>
         </div>
 
         <!-- Form Edit Profil Sendiri -->
         <form id="form-edit-my-profile" class="space-y-5 text-xs">
+          <!-- Status Banner jika gambar baru dipilih -->
+          <div id="prof-upload-status" class="hidden p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-medium">
+            <span class="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
+            <span>Foto profil berhasil dipilih dan dioptimalkan! Klik tombol <strong>Simpan Perubahan Profil</strong> di bawah untuk menerapkan.</span>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Nama Lengkap <span class="text-rose-500">*</span></label>
@@ -9543,22 +9832,25 @@ function renderProfileTab(currentUser, users) {
               <input type="password" id="prof-password" placeholder="Biarkan kosong jika tidak ingin ganti password" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
             </div>
             <div>
-              <label class="block font-bold text-slate-700 mb-1">URL Foto Profil (Avatar)</label>
-              <input type="url" id="prof-avatar" value="${currentUser.avatar || ''}" placeholder="https://..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
+              <label class="block font-bold text-slate-700 mb-1">URL / Data Foto Profil</label>
+              <input type="text" id="prof-avatar" value="${currentUser.avatar || ''}" placeholder="https://... atau otomatis dari tombol upload" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-mono text-[11px]">
             </div>
           </div>
 
-          <!-- Pilihan Avatar Cepat -->
-          <div>
-            <label class="block font-bold text-slate-700 mb-2">Atau Pilih Avatar Preset Cepat:</label>
-            <div class="flex items-center gap-3 overflow-x-auto pb-1">
+          <!-- Pilihan Avatar Cepat & Upload Box -->
+          <div class="p-4 rounded-2xl bg-[#f8fbfe] border border-[#dce9f2] space-y-2.5">
+            <div class="flex items-center justify-between">
+              <label class="block font-bold text-slate-700">Pilih Avatar Cepat atau Upload Sendiri:</label>
+              <span class="text-[11px] text-[#2c6673] font-semibold">Tersinkron Otomatis ke Seluruh Perangkat</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2.5">
               ${presetAvatars.map(av => `
-                <img src="${av}" alt="Preset" class="btn-select-preset-avatar w-10 h-10 rounded-xl object-cover border-2 border-transparent hover:border-[#1e3e50] cursor-pointer transition shadow-2xs" data-src="${av}">
+                <img src="${av}" alt="Preset" class="btn-select-preset-avatar w-10 h-10 rounded-xl object-cover border-2 border-transparent hover:border-[#1e3e50] cursor-pointer transition shadow-2xs hover:scale-105" data-src="${av}" title="Pilih avatar preset ini">
               `).join('')}
-              <label class="w-10 h-10 rounded-xl border-2 border-dashed border-slate-300 hover:border-[#1e3e50] flex items-center justify-center cursor-pointer text-slate-400 hover:text-[#1e3e50] transition shrink-0" title="Upload Foto dari Komputer">
-                <span class="material-symbols-outlined text-[20px]">upload_file</span>
-                <input type="file" id="prof-upload-file" accept="image/*" class="hidden">
+              <label for="prof-upload-file" class="w-10 h-10 rounded-xl border-2 border-dashed border-[#2c6673]/50 hover:border-[#1e3e50] bg-white flex items-center justify-center cursor-pointer text-[#2c6673] hover:text-[#1e3e50] transition shrink-0 shadow-2xs" title="Upload Foto dari Perangkat (Galeri HP / File Komputer)">
+                <span class="material-symbols-outlined text-[20px]">add_photo_alternate</span>
               </label>
+              <span class="text-xs text-slate-400 ml-1">← Klik ikon kamera untuk memilih foto dari HP atau komputer</span>
             </div>
           </div>
 
@@ -9817,19 +10109,43 @@ function setupSettingsListeners(container) {
     });
   });
 
-  // Upload Local Avatar File to Data URL
-  document.getElementById("prof-upload-file")?.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (re) => {
-        const dataUrl = re.target.result;
-        const urlInput = document.getElementById("prof-avatar");
-        const imgPreview = document.getElementById("preview-avatar-img");
-        if (urlInput) urlInput.value = dataUrl;
-        if (imgPreview) imgPreview.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
+  // Upload Local Avatar File to Data URL with Compression
+  document.getElementById("prof-upload-file")?.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById("prof-upload-status");
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `
+        <span class="material-symbols-outlined text-[15px] animate-spin text-[#1b6274]">progress_activity</span>
+        <span>Mengoptimalkan foto profil (${Math.round(file.size / 1024)} KB)...</span>
+      `;
+    }
+
+    try {
+      const compressedDataUrl = await compressAndCropAvatar(file, 256, 0.82);
+      const urlInput = document.getElementById("prof-avatar");
+      const imgPreview = document.getElementById("preview-avatar-img");
+      if (urlInput) urlInput.value = compressedDataUrl;
+      if (imgPreview) imgPreview.src = compressedDataUrl;
+
+      if (statusEl) {
+        statusEl.innerHTML = `
+          <span class="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
+          <span class="text-emerald-800 font-semibold">Foto siap! Klik "Simpan Perubahan Profil" di bawah untuk menerapkan.</span>
+        `;
+      }
+      if (window.showToast) window.showToast("📷 Foto profil berhasil dipilih dan dioptimalkan!", "info");
+    } catch (err) {
+      console.error("Gagal mengompresi foto profil:", err);
+      if (statusEl) {
+        statusEl.innerHTML = `
+          <span class="material-symbols-outlined text-[18px] text-rose-500">error</span>
+          <span class="text-rose-600">${err.message || 'Gagal memproses gambar'}</span>
+        `;
+      }
+      if (window.showToast) window.showToast(`❌ ${err.message || 'Gagal memproses foto'}`, "error");
     }
   });
 
@@ -9875,6 +10191,9 @@ function setupSettingsListeners(container) {
     if (idField) idField.value = "";
     if (form) form.reset();
 
+    const avPreview = document.getElementById("manage-user-avatar-preview");
+    if (avPreview) avPreview.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
+
     // Default select permissions for role "Admin"
     selectRolePermissions("Admin");
 
@@ -9909,6 +10228,9 @@ function setupSettingsListeners(container) {
       if (passEl) passEl.value = "";
       if (roleEl) roleEl.value = user.role || "Member / Creator";
       if (avEl) avEl.value = user.avatar || "";
+
+      const avPreview = document.getElementById("manage-user-avatar-preview");
+      if (avPreview) avPreview.src = user.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
 
       // Set permissions checkboxes
       const perms = user.permissions || (user.role === "Owner" ? ["all"] : []);
@@ -9979,6 +10301,30 @@ function setupSettingsListeners(container) {
     });
     document.getElementById("btn-clear-all-perms")?.addEventListener("click", () => {
       document.querySelectorAll("#modal-user-manage input[name='module-perm']").forEach(cb => cb.checked = false);
+    });
+
+    // Upload User Avatar in Modal
+    document.getElementById("manage-user-upload-file")?.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const compressed = await compressAndCropAvatar(file, 256, 0.82);
+        const avInput = document.getElementById("manage-user-avatar");
+        const avPreview = document.getElementById("manage-user-avatar-preview");
+        if (avInput) avInput.value = compressed;
+        if (avPreview) avPreview.src = compressed;
+        if (window.showToast) window.showToast("📷 Foto profil pengguna siap disimpan!", "info");
+      } catch (err) {
+        if (window.showToast) window.showToast(`❌ ${err.message || 'Gagal memproses foto'}`, "error");
+      }
+    });
+
+    // Update Avatar Preview when typing URL
+    document.getElementById("manage-user-avatar")?.addEventListener("input", (e) => {
+      const avPreview = document.getElementById("manage-user-avatar-preview");
+      if (avPreview && e.target.value.trim()) {
+        avPreview.src = e.target.value.trim();
+      }
     });
 
     // Submit Add / Edit User Form
@@ -10309,7 +10655,7 @@ function setupSettingsListeners(container) {
   });
 }
 
-return { setActiveSettingsTab: setActiveSettingsTab, renderSettings: renderSettings };
+return { compressAndCropAvatar: compressAndCropAvatar, setActiveSettingsTab: setActiveSettingsTab, renderSettings: renderSettings };
 })();
 
 
@@ -10656,6 +11002,8 @@ class App {
   shouldSkipViewReRender() {
     const userModal = document.getElementById("modal-user-manage");
     const isUserModalOpen = Boolean(userModal && !userModal.classList.contains("hidden"));
+    const taskModal = document.getElementById("modal-task-manage");
+    const isTaskModalOpen = Boolean(taskModal && !taskModal.classList.contains("hidden"));
     const isBackdropModalOpen = Boolean(document.querySelector(".modal-backdrop:not(.hidden)"));
     const globalModalContainer = document.getElementById("global-modal-container");
     const isGlobalModalOpen = Boolean(globalModalContainer && globalModalContainer.children.length > 0);
@@ -10668,7 +11016,7 @@ class App {
       )
     );
 
-    return isUserModalOpen || isBackdropModalOpen || isGlobalModalOpen || isUserTyping;
+    return isUserModalOpen || isTaskModalOpen || isBackdropModalOpen || isGlobalModalOpen || isUserTyping;
   }
 
   handleRoute() {
@@ -10692,6 +11040,10 @@ class App {
     let hash = rawHash;
 
     // Aliases
+    if (hash === "profile") {
+      setActiveSettingsTab("profile");
+      hash = "settings";
+    }
     if (hash === "ideas") hash = "content";
     if (hash === "goals") hash = "targets";
     if (hash === "assets") hash = "media";

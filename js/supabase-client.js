@@ -214,7 +214,62 @@ class SupabaseManager {
     // 2. Pemetaan & Sinkronisasi Alias Kolom (Aplikasi vs Skema Database PostgreSQL)
     if (sheetName === SHEET_NAMES.CONTENT_TASKS) {
       clean.task_name = clean.task_title || clean.task_name || clean.title || "Tugas Pekerjaan";
-      clean.task_title = clean.task_name;
+      if (!clean.notes && clean.description) clean.notes = clean.description;
+      if (!clean.description && clean.notes) clean.description = clean.notes;
+
+      // Pastikan assigned_user valid ke user_id yang ada di tabel users (mencegah error foreign key 23503)
+      if (clean.assigned_user) {
+        let matchedUserId = null;
+        if (typeof window !== "undefined" && window.store) {
+          const users = window.store.getItems(SHEET_NAMES.USERS) || [];
+          const foundUser = users.find(u => u.user_id === clean.assigned_user || u.name === clean.assigned_user);
+          if (foundUser) matchedUserId = foundUser.user_id;
+        }
+        if (!matchedUserId && String(clean.assigned_user).startsWith("USR-")) {
+          matchedUserId = clean.assigned_user;
+        }
+        clean.assigned_user = matchedUserId || null;
+      }
+
+      // Pastikan brand_id valid ke tabel brands (mencegah error foreign key 23503)
+      if (clean.brand_id) {
+        let matchedBrandId = null;
+        if (typeof window !== "undefined" && window.store) {
+          const brands = window.store.getItems(SHEET_NAMES.BRANDS) || [];
+          const foundBrand = brands.find(b => b.brand_id === clean.brand_id || b.brand_name === clean.brand_id);
+          if (foundBrand) matchedBrandId = foundBrand.brand_id;
+        }
+        if (!matchedBrandId && String(clean.brand_id).startsWith("BRD-")) {
+          matchedBrandId = clean.brand_id;
+        }
+        clean.brand_id = matchedBrandId || null;
+      }
+
+      // Pastikan content_id valid ke content_planning jika ada
+      if (clean.content_id) {
+        let matchedContentId = null;
+        if (typeof window !== "undefined" && window.store) {
+          const contents = window.store.getItems(SHEET_NAMES.CONTENT_PLANNING) || [];
+          const foundContent = contents.find(c => c.content_id === clean.content_id);
+          if (foundContent) matchedContentId = foundContent.content_id;
+        }
+        if (!matchedContentId && String(clean.content_id).startsWith("CNT-")) {
+          matchedContentId = clean.content_id;
+        }
+        clean.content_id = matchedContentId || null;
+      }
+
+      // Validasi deadline: harus ISO string atau null (mencegah error invalid input syntax Postgres 22007)
+      if (clean.deadline) {
+        const d = new Date(clean.deadline);
+        if (isNaN(d.getTime())) {
+          clean.deadline = null;
+        } else {
+          clean.deadline = clean.deadline.includes("T") ? clean.deadline : `${clean.deadline}T00:00:00.000Z`;
+        }
+      } else {
+        clean.deadline = null;
+      }
     } else if (sheetName === SHEET_NAMES.CONTENT_PLANNING) {
       if (clean.hook && !clean.hook_3sec) clean.hook_3sec = clean.hook;
       if (clean.hook_3sec && !clean.hook) clean.hook = clean.hook_3sec;
@@ -258,6 +313,24 @@ class SupabaseManager {
     if (sheetName === SHEET_NAMES.CONTENT_TASKS) {
       if (!item.task_title && item.task_name) item.task_title = item.task_name;
       if (!item.title && item.task_name) item.title = item.task_name;
+      if (!item.description && item.notes) item.description = item.notes;
+      if (!item.notes && item.description) item.notes = item.description;
+
+      // Normalisasi format deadline untuk tampilan frontend: YYYY-MM-DD
+      if (item.deadline) {
+        try {
+          const dStr = String(item.deadline);
+          if (dStr.includes("T")) item.deadline = dStr.split("T")[0];
+          else if (dStr.length > 10) item.deadline = dStr.slice(0, 10);
+        } catch (e) {}
+      }
+
+      // Sinkronkan brand_name jika belum terisi
+      if (item.brand_id && !item.brand_name && typeof window !== "undefined" && window.store) {
+        const brands = window.store.getItems(SHEET_NAMES.BRANDS) || [];
+        const b = brands.find(x => x.brand_id === item.brand_id);
+        if (b) item.brand_name = b.brand_name;
+      }
     } else if (sheetName === SHEET_NAMES.CONTENT_PLANNING) {
       if (!item.hook && item.hook_3sec) item.hook = item.hook_3sec;
     } else if (sheetName === SHEET_NAMES.CONTENT_CALENDAR) {
@@ -294,7 +367,25 @@ class SupabaseManager {
           if (!error && Array.isArray(data)) {
             // Normalisasi data dari Supabase ke state store
             const normalized = data.map(row => this.normalizeFromSupabase(sheetName, row));
-            storeInstance.replaceSheetData(sheetName, normalized);
+
+            // Perlindungan data baru: Cek apakah ada data lokal yang baru dibuat (< 15 detik lalu) yang belum sempat tersimpan di Supabase
+            const currentLocal = storeInstance.getItems(sheetName) || [];
+            const now = Date.now();
+            const pk = PK_MAP[tableName] || "id";
+            const remotePks = new Set(normalized.map(r => String(r[pk])));
+
+            const pendingLocal = currentLocal.filter(localItem => {
+              if (remotePks.has(String(localItem[pk]))) return false;
+              if (localItem.created_at) {
+                const itemAge = now - new Date(localItem.created_at).getTime();
+                return itemAge < 15000; // Kurang dari 15 detik lalu
+              }
+              return false;
+            });
+
+            // Gabungkan remote data dengan item lokal yang masih sangat baru
+            const merged = [...pendingLocal, ...normalized];
+            storeInstance.replaceSheetData(sheetName, merged);
             totalFetched++;
           } else if (error) {
             console.warn(`[Supabase fetchAll error on ${tableName}]:`, error.message);
@@ -319,42 +410,102 @@ class SupabaseManager {
     if (!tableName) return;
     const pk = PK_MAP[tableName] || "id";
 
-    try {
-      if (action === "create" || action === "insert") {
-        let payload = this.normalizeForSupabase(sheetName, item);
-        let res = await this.client.from(tableName).upsert(payload);
-        
-        // Resilient fallback jika terdapat kolom yang belum terdefinisi di skema Supabase
-        if (res.error && res.error.code === "PGRST204" && res.error.message) {
+    // Helper untuk menangani retry adaptif
+    const executeWithRetry = async (runOperation, getPayload) => {
+      let payload = { ...getPayload() };
+      let res = await runOperation(payload);
+      let maxAttempts = 8;
+
+      while (res.error && maxAttempts > 0) {
+        maxAttempts--;
+        let recovered = false;
+
+        // 1. Tangani kolom tidak ditemukan di tabel PostgreSQL Supabase (PGRST204)
+        if (res.error.code === "PGRST204" || (res.error.message && res.error.message.includes("Could not find the"))) {
           const match = res.error.message.match(/Could not find the '([^']+)' column/);
-          if (match && match[1]) {
+          if (match && match[1] && payload[match[1]] !== undefined) {
             console.warn(`[Supabase Schema Fallback] Kolom '${match[1]}' belum ada di tabel '${tableName}', menyimpan tanpa kolom tersebut...`);
             delete payload[match[1]];
-            res = await this.client.from(tableName).upsert(payload);
+            res = await runOperation(payload);
+            recovered = true;
           }
         }
+
+        // 2. Tangani Foreign Key Violation (23503)
+        if (!recovered && (res.error.code === "23503" || (res.error.message && res.error.message.toLowerCase().includes("foreign key")))) {
+          console.warn(`[Supabase FK Fallback] Foreign key constraint error pada '${tableName}':`, res.error.message);
+          let modified = false;
+          const fkCandidates = ["assigned_user", "brand_id", "content_id", "project_id", "campaign_id", "client_id", "user_id"];
+          for (const fk of fkCandidates) {
+            if (payload[fk] !== null && payload[fk] !== undefined) {
+              if (res.error.message.includes(fk) || (res.error.details && res.error.details.includes(fk))) {
+                payload[fk] = null;
+                modified = true;
+                break;
+              }
+            }
+          }
+          if (!modified) {
+            if (payload.assigned_user) { payload.assigned_user = null; modified = true; }
+            else if (payload.brand_id) { payload.brand_id = null; modified = true; }
+            else if (payload.content_id) { payload.content_id = null; modified = true; }
+          }
+          if (modified) {
+            res = await runOperation(payload);
+            recovered = true;
+          }
+        }
+
+        // 3. Tangani Invalid Timestamp / Date (22007)
+        if (!recovered && (res.error.code === "22007" || (res.error.message && res.error.message.toLowerCase().includes("timestamp")))) {
+          console.warn(`[Supabase Date Fallback] Format timestamp error pada '${tableName}':`, res.error.message);
+          let modified = false;
+          const dateFields = ["deadline", "start_date", "end_date", "publication_date", "publish_date", "shooting_date", "production_date", "upload_date", "date"];
+          for (const df of dateFields) {
+            if (payload[df] !== null && payload[df] !== undefined) {
+              payload[df] = null;
+              modified = true;
+            }
+          }
+          if (modified) {
+            res = await runOperation(payload);
+            recovered = true;
+          }
+        }
+
+        if (!recovered) {
+          break; // Tidak dapat di-recover otomatis
+        }
+      }
+
+      return res;
+    };
+
+    try {
+      if (action === "create" || action === "insert") {
+        const payload = this.normalizeForSupabase(sheetName, item);
+        const res = await executeWithRetry(
+          (p) => this.client.from(tableName).upsert(p),
+          () => payload
+        );
 
         if (res.error) {
           console.warn(`[Supabase autoSave INSERT error on ${tableName}]:`, res.error.message, res.error.details);
         } else {
-          console.log(`[Supabase autoSave] Sukses simpan ke ${tableName}`);
+          console.log(`[Supabase autoSave] Sukses simpan ke ${tableName} (ID: ${item[pk]})`);
         }
       } else if (action === "update") {
         const targetId = id || item[pk];
-        let payload = this.normalizeForSupabase(sheetName, item);
-        let res = await this.client.from(tableName).update(payload).eq(pk, targetId);
-
-        if (res.error && res.error.code === "PGRST204" && res.error.message) {
-          const match = res.error.message.match(/Could not find the '([^']+)' column/);
-          if (match && match[1]) {
-            console.warn(`[Supabase Schema Fallback] Kolom '${match[1]}' belum ada di tabel '${tableName}', memperbarui tanpa kolom tersebut...`);
-            delete payload[match[1]];
-            res = await this.client.from(tableName).update(payload).eq(pk, targetId);
-          }
-        }
+        const payload = this.normalizeForSupabase(sheetName, item);
+        const res = await executeWithRetry(
+          (p) => this.client.from(tableName).update(p).eq(pk, targetId),
+          () => payload
+        );
 
         if (res.error) {
           console.warn(`[Supabase autoSave UPDATE error on ${tableName}]:`, res.error.message);
+        } else {
+          console.log(`[Supabase autoSave] Sukses update ke ${tableName} (ID: ${targetId})`);
         }
       } else if (action === "delete") {
         const targetId = id || (item ? item[pk] : null);

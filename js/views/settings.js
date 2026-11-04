@@ -15,6 +15,53 @@ let activeSettingsTab = (function() {
 })();
 let editingUserId = null; // null for add new user, userId string for editing
 
+/**
+ * Kompresi dan crop foto profil menjadi bujur sangkar (square cover) 256x256
+ * Menghasilkan Data URL JPEG berukuran ringan (~20-35 KB) yang ramah LocalStorage dan Supabase
+ */
+export function compressAndCropAvatar(file, targetSize = 256, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith("image/")) {
+      return reject(new Error("File yang dipilih bukan merupakan format gambar yang didukung."));
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Gagal membaca file gambar dari perangkat."));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("File gambar rusak atau tidak dapat diproses."));
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = targetSize;
+          canvas.height = targetSize;
+          const ctx = canvas.getContext("2d");
+
+          const sw = img.naturalWidth || img.width;
+          const sh = img.naturalHeight || img.height;
+          const minDim = Math.min(sw, sh);
+          const sx = (sw - minDim) / 2;
+          const sy = (sh - minDim) / 2;
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
+
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+if (typeof window !== "undefined") {
+  window.compressAndCropAvatar = compressAndCropAvatar;
+}
+
 export function setActiveSettingsTab(tab) {
   if (["cloud", "profile", "data"].includes(tab)) {
     activeSettingsTab = tab;
@@ -34,6 +81,11 @@ export function renderSettings(container) {
     permissions: ["all"]
   };
 
+  const isAdminOrOwner = auth.isAdminOrOwner();
+  if (!isAdminOrOwner) {
+    activeSettingsTab = "profile";
+  }
+
   const gasUrl = store.getSetting ? store.getSetting("gas_api_url") : "";
   const secretToken = store.getSetting ? store.getSetting("secret_token", "PLANNER_SECRET_TOKEN_2026") : "PLANNER_SECRET_TOKEN_2026";
   const driveFolder = store.getSetting ? store.getSetting("drive_root_folder_id") : "";
@@ -44,38 +96,53 @@ export function renderSettings(container) {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#d2e2ec] shadow-sm">
         <div>
           <div class="flex items-center gap-2">
-            <span class="text-xs font-bold uppercase tracking-wider text-[#2c6673] bg-[#e3f4f8] px-2.5 py-1 rounded-md">Modul 21</span>
+            <span class="text-xs font-bold uppercase tracking-wider text-[#2c6673] bg-[#e3f4f8] px-2.5 py-1 rounded-md">Profil Pengguna</span>
             <span class="text-xs text-slate-400">•</span>
-            <span class="text-xs font-bold text-[#5c7786]">Pengaturan &amp; Sistem</span>
+            <span class="text-xs font-bold text-[#5c7786]">${currentUser.name} (${currentUser.role})</span>
           </div>
-          <h1 class="text-2xl font-extrabold text-[#143242] mt-1 tracking-tight">Application Settings &amp; Cloud Sync</h1>
-          <p class="text-xs text-[#5c7786] mt-0.5">Konfigurasi REST API Google Apps Script, profil tim, manajemen hak akses (RBAC), dan backup database.</p>
+          <h1 class="text-2xl font-extrabold text-[#143242] mt-1 tracking-tight">
+            ${isAdminOrOwner ? 'Application Settings &amp; Cloud Sync' : 'Profil Akun &amp; Foto Pengguna'}
+          </h1>
+          <p class="text-xs text-[#5c7786] mt-0.5">
+            ${isAdminOrOwner ? 'Konfigurasi integrasi cloud Supabase, profil tim studio, hak akses (RBAC), dan backup database.' : 'Ubah foto profil dari galeri / kamera perangkat Anda, perbarui nama, bio, dan kata sandi login.'}
+          </p>
         </div>
 
-        <button onclick="window.triggerCloudSync()" class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#1e3e50] hover:bg-[#2c6673] text-white text-xs font-semibold shadow-sm transition">
-          <span class="material-symbols-outlined text-[16px]">sync</span>
-          <span>Tarik Data Sheets Sekarang</span>
-        </button>
+        ${isAdminOrOwner ? `
+          <button onclick="window.triggerCloudSync()" class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#1e3e50] hover:bg-[#2c6673] text-white text-xs font-semibold shadow-sm transition">
+            <span class="material-symbols-outlined text-[16px]">sync</span>
+            <span>Tarik Data Sheets Sekarang</span>
+          </button>
+        ` : `
+          <button type="button" onclick="window.handleAppLogout()" class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold shadow-2xs border border-rose-200 transition">
+            <span class="material-symbols-outlined text-[16px]">logout</span>
+            <span>Keluar / Logout</span>
+          </button>
+        `}
       </div>
 
       <!-- Settings Navigation Tabs -->
       <div class="flex items-center gap-2 border-b border-[#cbdfe9] pb-2 overflow-x-auto">
-        <button id="tab-set-cloud" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'cloud' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
-          🌐 Integrasi Cloud (Supabase &amp; Sheets)
-        </button>
+        ${isAdminOrOwner ? `
+          <button id="tab-set-cloud" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'cloud' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
+            🌐 Integrasi Cloud (Supabase &amp; Sheets)
+          </button>
+        ` : ''}
         <button id="tab-set-profile" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'profile' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
-          👤 Profil Pengguna &amp; Hak Akses Tim (${users.length})
+          👤 Profil Pengguna ${isAdminOrOwner ? `&amp; Hak Akses Tim (${users.length})` : 'Saya'}
         </button>
-        <button id="tab-set-data" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'data' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
-          💾 Manajemen Data &amp; Backup JSON
-        </button>
+        ${isAdminOrOwner ? `
+          <button id="tab-set-data" class="px-4 py-2 rounded-xl text-xs font-extrabold transition shrink-0 ${activeSettingsTab === 'data' ? 'bg-[#1e3e50] text-white shadow-xs' : 'bg-white text-[#5c7786] border border-[#d2e2ec] hover:bg-[#eaf2f7]'}">
+            💾 Manajemen Data &amp; Backup JSON
+          </button>
+        ` : ''}
       </div>
 
       <!-- Tab Content Area -->
       <div id="settings-tab-content">
-        ${activeSettingsTab === "cloud" ? renderCloudTab(gasUrl, secretToken, driveFolder) :
-          activeSettingsTab === "profile" ? renderProfileTab(currentUser, users) :
-          renderDataTab()}
+        ${activeSettingsTab === "cloud" && isAdminOrOwner ? renderCloudTab(gasUrl, secretToken, driveFolder) :
+          activeSettingsTab === "data" && isAdminOrOwner ? renderDataTab() :
+          renderProfileTab(currentUser, users)}
       </div>
     </div>
   `;
@@ -267,9 +334,15 @@ function renderProfileTab(currentUser, users) {
       <div class="bg-white p-6 sm:p-7 rounded-3xl border border-[#d2e2ec] shadow-sm space-y-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
           <div class="flex items-center gap-4">
-            <div class="relative group">
-              <img id="preview-avatar-img" src="${currentUser.avatar || presetAvatars[0]}" alt="${currentUser.name}" class="w-16 h-16 rounded-2xl object-cover ring-2 ring-[#1e3e50] shadow-md">
-              <span class="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-[#38b2ac] border-2 border-white"></span>
+            <div class="relative group cursor-pointer" onclick="document.getElementById('prof-upload-file')?.click()" title="Klik untuk upload foto profil dari perangkat">
+              <img id="preview-avatar-img" src="${currentUser.avatar || presetAvatars[0]}" alt="${currentUser.name}" class="w-20 h-20 rounded-2xl object-cover ring-2 ring-[#1e3e50] shadow-md transition-all group-hover:brightness-90">
+              <div class="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
+                <span class="material-symbols-outlined text-[22px]">photo_camera</span>
+                <span>Ganti Foto</span>
+              </div>
+              <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#38b2ac] border-2 border-white flex items-center justify-center text-white" title="Status Online">
+                <span class="w-2 h-2 rounded-full bg-white"></span>
+              </span>
             </div>
             <div>
               <h3 class="font-extrabold text-lg text-[#143242] leading-tight">${currentUser.name}</h3>
@@ -280,16 +353,28 @@ function renderProfileTab(currentUser, users) {
                 <span class="text-xs text-slate-400">•</span>
                 <span class="text-xs font-mono text-[#5c7786]">@${currentUser.username || 'user'}</span>
               </div>
+              <p class="text-xs text-slate-500 mt-1">${currentUser.bio || 'Anggota Tim Studio'}</p>
             </div>
           </div>
 
-          <div class="text-xs text-slate-500 font-medium">
-            <span>Sesi Aktif: <strong>${currentUser.email || '-'}</strong></span>
+          <div class="flex flex-col sm:items-end gap-1.5">
+            <label for="prof-upload-file" class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#e3f4f8] hover:bg-[#d0ebf3] text-[#1b6274] font-bold text-xs cursor-pointer transition shadow-2xs border border-[#b6dce7]">
+              <span class="material-symbols-outlined text-[19px]">add_a_photo</span>
+              <span>Upload Foto dari Perangkat Ini</span>
+              <input type="file" id="prof-upload-file" accept="image/*" class="hidden">
+            </label>
+            <span class="text-[10.5px] text-slate-400">Pilih dari Galeri HP / Kamera / Komputer</span>
           </div>
         </div>
 
         <!-- Form Edit Profil Sendiri -->
         <form id="form-edit-my-profile" class="space-y-5 text-xs">
+          <!-- Status Banner jika gambar baru dipilih -->
+          <div id="prof-upload-status" class="hidden p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-medium">
+            <span class="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
+            <span>Foto profil berhasil dipilih dan dioptimalkan! Klik tombol <strong>Simpan Perubahan Profil</strong> di bawah untuk menerapkan.</span>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Nama Lengkap <span class="text-rose-500">*</span></label>
@@ -311,22 +396,25 @@ function renderProfileTab(currentUser, users) {
               <input type="password" id="prof-password" placeholder="Biarkan kosong jika tidak ingin ganti password" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
             </div>
             <div>
-              <label class="block font-bold text-slate-700 mb-1">URL Foto Profil (Avatar)</label>
-              <input type="url" id="prof-avatar" value="${currentUser.avatar || ''}" placeholder="https://..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
+              <label class="block font-bold text-slate-700 mb-1">URL / Data Foto Profil</label>
+              <input type="text" id="prof-avatar" value="${currentUser.avatar || ''}" placeholder="https://... atau otomatis dari tombol upload" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] font-mono text-[11px]">
             </div>
           </div>
 
-          <!-- Pilihan Avatar Cepat -->
-          <div>
-            <label class="block font-bold text-slate-700 mb-2">Atau Pilih Avatar Preset Cepat:</label>
-            <div class="flex items-center gap-3 overflow-x-auto pb-1">
+          <!-- Pilihan Avatar Cepat & Upload Box -->
+          <div class="p-4 rounded-2xl bg-[#f8fbfe] border border-[#dce9f2] space-y-2.5">
+            <div class="flex items-center justify-between">
+              <label class="block font-bold text-slate-700">Pilih Avatar Cepat atau Upload Sendiri:</label>
+              <span class="text-[11px] text-[#2c6673] font-semibold">Tersinkron Otomatis ke Seluruh Perangkat</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2.5">
               ${presetAvatars.map(av => `
-                <img src="${av}" alt="Preset" class="btn-select-preset-avatar w-10 h-10 rounded-xl object-cover border-2 border-transparent hover:border-[#1e3e50] cursor-pointer transition shadow-2xs" data-src="${av}">
+                <img src="${av}" alt="Preset" class="btn-select-preset-avatar w-10 h-10 rounded-xl object-cover border-2 border-transparent hover:border-[#1e3e50] cursor-pointer transition shadow-2xs hover:scale-105" data-src="${av}" title="Pilih avatar preset ini">
               `).join('')}
-              <label class="w-10 h-10 rounded-xl border-2 border-dashed border-slate-300 hover:border-[#1e3e50] flex items-center justify-center cursor-pointer text-slate-400 hover:text-[#1e3e50] transition shrink-0" title="Upload Foto dari Komputer">
-                <span class="material-symbols-outlined text-[20px]">upload_file</span>
-                <input type="file" id="prof-upload-file" accept="image/*" class="hidden">
+              <label for="prof-upload-file" class="w-10 h-10 rounded-xl border-2 border-dashed border-[#2c6673]/50 hover:border-[#1e3e50] bg-white flex items-center justify-center cursor-pointer text-[#2c6673] hover:text-[#1e3e50] transition shrink-0 shadow-2xs" title="Upload Foto dari Perangkat (Galeri HP / File Komputer)">
+                <span class="material-symbols-outlined text-[20px]">add_photo_alternate</span>
               </label>
+              <span class="text-xs text-slate-400 ml-1">← Klik ikon kamera untuk memilih foto dari HP atau komputer</span>
             </div>
           </div>
 
@@ -585,19 +673,43 @@ function setupSettingsListeners(container) {
     });
   });
 
-  // Upload Local Avatar File to Data URL
-  document.getElementById("prof-upload-file")?.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (re) => {
-        const dataUrl = re.target.result;
-        const urlInput = document.getElementById("prof-avatar");
-        const imgPreview = document.getElementById("preview-avatar-img");
-        if (urlInput) urlInput.value = dataUrl;
-        if (imgPreview) imgPreview.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
+  // Upload Local Avatar File to Data URL with Compression
+  document.getElementById("prof-upload-file")?.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById("prof-upload-status");
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `
+        <span class="material-symbols-outlined text-[15px] animate-spin text-[#1b6274]">progress_activity</span>
+        <span>Mengoptimalkan foto profil (${Math.round(file.size / 1024)} KB)...</span>
+      `;
+    }
+
+    try {
+      const compressedDataUrl = await compressAndCropAvatar(file, 256, 0.82);
+      const urlInput = document.getElementById("prof-avatar");
+      const imgPreview = document.getElementById("preview-avatar-img");
+      if (urlInput) urlInput.value = compressedDataUrl;
+      if (imgPreview) imgPreview.src = compressedDataUrl;
+
+      if (statusEl) {
+        statusEl.innerHTML = `
+          <span class="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
+          <span class="text-emerald-800 font-semibold">Foto siap! Klik "Simpan Perubahan Profil" di bawah untuk menerapkan.</span>
+        `;
+      }
+      if (window.showToast) window.showToast("📷 Foto profil berhasil dipilih dan dioptimalkan!", "info");
+    } catch (err) {
+      console.error("Gagal mengompresi foto profil:", err);
+      if (statusEl) {
+        statusEl.innerHTML = `
+          <span class="material-symbols-outlined text-[18px] text-rose-500">error</span>
+          <span class="text-rose-600">${err.message || 'Gagal memproses gambar'}</span>
+        `;
+      }
+      if (window.showToast) window.showToast(`❌ ${err.message || 'Gagal memproses foto'}`, "error");
     }
   });
 
@@ -643,6 +755,9 @@ function setupSettingsListeners(container) {
     if (idField) idField.value = "";
     if (form) form.reset();
 
+    const avPreview = document.getElementById("manage-user-avatar-preview");
+    if (avPreview) avPreview.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
+
     // Default select permissions for role "Admin"
     selectRolePermissions("Admin");
 
@@ -677,6 +792,9 @@ function setupSettingsListeners(container) {
       if (passEl) passEl.value = "";
       if (roleEl) roleEl.value = user.role || "Member / Creator";
       if (avEl) avEl.value = user.avatar || "";
+
+      const avPreview = document.getElementById("manage-user-avatar-preview");
+      if (avPreview) avPreview.src = user.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
 
       // Set permissions checkboxes
       const perms = user.permissions || (user.role === "Owner" ? ["all"] : []);
@@ -747,6 +865,30 @@ function setupSettingsListeners(container) {
     });
     document.getElementById("btn-clear-all-perms")?.addEventListener("click", () => {
       document.querySelectorAll("#modal-user-manage input[name='module-perm']").forEach(cb => cb.checked = false);
+    });
+
+    // Upload User Avatar in Modal
+    document.getElementById("manage-user-upload-file")?.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const compressed = await compressAndCropAvatar(file, 256, 0.82);
+        const avInput = document.getElementById("manage-user-avatar");
+        const avPreview = document.getElementById("manage-user-avatar-preview");
+        if (avInput) avInput.value = compressed;
+        if (avPreview) avPreview.src = compressed;
+        if (window.showToast) window.showToast("📷 Foto profil pengguna siap disimpan!", "info");
+      } catch (err) {
+        if (window.showToast) window.showToast(`❌ ${err.message || 'Gagal memproses foto'}`, "error");
+      }
+    });
+
+    // Update Avatar Preview when typing URL
+    document.getElementById("manage-user-avatar")?.addEventListener("input", (e) => {
+      const avPreview = document.getElementById("manage-user-avatar-preview");
+      if (avPreview && e.target.value.trim()) {
+        avPreview.src = e.target.value.trim();
+      }
     });
 
     // Submit Add / Edit User Form
