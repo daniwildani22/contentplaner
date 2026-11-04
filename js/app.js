@@ -93,7 +93,9 @@ class App {
           showToast(valid.reason || "⛔ Akses Ditolak: Akun Anda telah dinonaktifkan atau dihapus oleh Owner.", "error");
           return;
         }
-        this.handleRoute();
+        if (!this.shouldSkipViewReRender()) {
+          this.handleRoute();
+        }
       });
 
       // Fungsi Penyelarasan Sinkronisasi Otomatis Antar Perangkat
@@ -109,7 +111,9 @@ class App {
               return;
             }
             this.updateSidebarUserProfile();
-            this.handleRoute();
+            if (!this.shouldSkipViewReRender()) {
+              this.handleRoute();
+            }
           }
         });
       };
@@ -334,6 +338,24 @@ class App {
         this.handleRoute();
       }
     });
+  }
+
+  shouldSkipViewReRender() {
+    const userModal = document.getElementById("modal-user-manage");
+    const isUserModalOpen = Boolean(userModal && !userModal.classList.contains("hidden"));
+    const isBackdropModalOpen = Boolean(document.querySelector(".modal-backdrop:not(.hidden)"));
+    const globalModalContainer = document.getElementById("global-modal-container");
+    const isGlobalModalOpen = Boolean(globalModalContainer && globalModalContainer.children.length > 0);
+
+    const isUserTyping = Boolean(
+      document.activeElement && (
+        document.activeElement.tagName === "INPUT" ||
+        document.activeElement.tagName === "TEXTAREA" ||
+        document.activeElement.tagName === "SELECT"
+      )
+    );
+
+    return isUserModalOpen || isBackdropModalOpen || isGlobalModalOpen || isUserTyping;
   }
 
   handleRoute() {

@@ -77,6 +77,11 @@ class AuthManager {
   validateCurrentSession(storeInstance = null) {
     if (!this.currentUser) return { valid: false, reason: "Tidak ada sesi aktif." };
 
+    // PERLINDUNGAN UTAMA: Akun Owner tidak boleh pernah dicabut sesinya secara otomatis
+    if (this.isOwner()) {
+      return { valid: true, user: this.currentUser };
+    }
+
     const storeToUse = storeInstance || (typeof store !== "undefined" ? store : null);
     if (!storeToUse) return { valid: true, user: this.currentUser };
 
@@ -213,7 +218,15 @@ class AuthManager {
     }
 
     const prefix = "USR";
-    const nextNum = users.length + 1;
+    let maxNum = 0;
+    users.forEach(u => {
+      const match = String(u.user_id || "").match(/USR-(\d+)/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    });
+    const nextNum = maxNum + 1;
     const newId = `${prefix}-${String(nextNum).padStart(3, "0")}`;
 
     const newUser = {

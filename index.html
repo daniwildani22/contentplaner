@@ -582,6 +582,162 @@
   </div>
 
   <!-- ======================================================================= -->
+  <!-- 5b. MODAL TAMBAH & EDIT PENGGUNA (PERSISTENT MASTER MODAL)             -->
+  <!-- ======================================================================= -->
+  <div id="modal-user-manage" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 border border-[#d2e2ec] shadow-2xl space-y-6 my-8 animate-in fade-in zoom-in duration-200">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-[#e3f4f8] text-[#1b6274] flex items-center justify-center font-bold">
+            <span class="material-symbols-outlined text-[22px]">manage_accounts</span>
+          </div>
+          <div>
+            <h3 id="modal-user-title" class="text-base font-extrabold text-[#143242]">Tambah Pengguna Baru</h3>
+            <p class="text-xs text-[#5c7786]">Tentukan identitas dan hak akses modul untuk pengguna ini.</p>
+          </div>
+        </div>
+        <button type="button" id="btn-close-user-modal" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition">
+          <span class="material-symbols-outlined text-[20px]">close</span>
+        </button>
+      </div>
+
+      <form id="form-manage-user" class="space-y-5 text-xs">
+        <input type="hidden" id="manage-user-id" value="">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Nama Lengkap <span class="text-rose-500">*</span></label>
+            <input type="text" id="manage-user-name" required placeholder="Contoh: Andi Pratama" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Username Login <span class="text-rose-500">*</span></label>
+            <input type="text" id="manage-user-username" required placeholder="andi" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Email</label>
+            <input type="email" id="manage-user-email" placeholder="andi@creatorhub.id" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Password Login <span class="text-rose-500">*</span></label>
+            <input type="password" id="manage-user-password" placeholder="123" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
+            <p class="text-[10px] text-slate-400 mt-1">Kosongkan saat edit jika tidak ingin mengubah password.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Peran (Role)</label>
+            <select id="manage-user-role" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-semibold">
+              <option value="Admin">Admin</option>
+              <option value="Video Editor">Video Editor</option>
+              <option value="Member / Creator">Member / Creator</option>
+              <option value="Owner">Owner</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">URL Avatar (Opsional)</label>
+            <input type="url" id="manage-user-avatar" placeholder="https://images.unsplash.com/..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
+          </div>
+        </div>
+
+        <!-- Permission Checklist (RBAC) -->
+        <div class="pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h4 class="font-extrabold text-sm text-[#143242]">Pengaturan Izin Hak Akses Modul (RBAC)</h4>
+              <p class="text-[11px] text-[#5c7786]">Centang modul yang diizinkan untuk diakses oleh pengguna ini.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="btn-select-all-perms" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-[#1e3e50] text-[11px] font-bold transition">Pilih Semua</button>
+              <button type="button" id="btn-clear-all-perms" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-rose-600 text-[11px] font-bold transition">Hapus Semua</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto p-1 border border-slate-200 rounded-xl bg-slate-50/50">
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="dashboard" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">space_dashboard</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Executive Dashboard</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="content" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">lightbulb</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Ide & Content Pipeline</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="calendar" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">calendar_month</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Kalender Konten Terpadu</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="tasks" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">view_kanban</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Tugas & Kanban Board</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="production" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">edit_note</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Script & Copywriting</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="media" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">folder_shared</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Media Library & Drive</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="reports" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">table_chart</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Database Sheets</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="business" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">business_center</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Bisnis, Klien & Brand</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="finance" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">payments</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Kas, Beban & Invoice</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="timetracking" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">timer</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Stopwatch & Rutinitas</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="targets" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">insights</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Sasaran KPI & Target</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="notifications" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">notifications</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Pusat Notifikasi</span>
+            </label>
+            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
+              <input type="checkbox" name="module-perm" value="settings" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
+              <span class="material-symbols-outlined text-[16px] text-[#2c6673]">settings</span>
+              <span class="text-[11.5px] font-medium text-slate-800 leading-tight">Pengaturan Sistem</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+          <button type="button" id="btn-cancel-manage-user" class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition">
+            Batal
+          </button>
+          <button type="submit" class="px-6 py-2.5 rounded-xl bg-[#1e3e50] hover:bg-[#2c6673] text-white font-bold shadow-md transition">
+            Simpan Pengguna &amp; Izin Akses
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
   <!-- 6. GLOBAL DYNAMIC MODAL CONTAINER                                       -->
   <!-- ======================================================================= -->
   <div id="global-modal-container"></div>

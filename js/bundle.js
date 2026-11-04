@@ -1,7 +1,7 @@
 ﻿/**
  * ALL IN ONE CONTENT CREATOR BUSINESS & CONTENT PLANNER - COMPLETE APPLICATION BUNDLE
  * Standalone Zero-Dependency Build (Works directly via file:/// and http://)
- * Generated: 2026-11-04 13:31:06
+ * Generated: 2026-11-04 13:57:07
  */
 (function(window, document) {
 'use strict';
@@ -2170,6 +2170,11 @@ class AuthManager {
   validateCurrentSession(storeInstance = null) {
     if (!this.currentUser) return { valid: false, reason: "Tidak ada sesi aktif." };
 
+    // PERLINDUNGAN UTAMA: Akun Owner tidak boleh pernah dicabut sesinya secara otomatis
+    if (this.isOwner()) {
+      return { valid: true, user: this.currentUser };
+    }
+
     const storeToUse = storeInstance || (typeof store !== "undefined" ? store : null);
     if (!storeToUse) return { valid: true, user: this.currentUser };
 
@@ -2306,7 +2311,15 @@ class AuthManager {
     }
 
     const prefix = "USR";
-    const nextNum = users.length + 1;
+    let maxNum = 0;
+    users.forEach(u => {
+      const match = String(u.user_id || "").match(/USR-(\d+)/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    });
+    const nextNum = maxNum + 1;
     const newId = `${prefix}-${String(nextNum).padStart(3, "0")}`;
 
     const newUser = {
@@ -9231,11 +9244,14 @@ const { setActiveSettingsTab, renderSettings } = (function() {
 // [import stripped]
 // [import stripped]
 // [import stripped]
-let activeSettingsTab = "cloud"; // 'cloud', 'profile', 'data'
+let activeSettingsTab = (function() {
+  try { return localStorage.getItem("active_settings_tab") || "profile"; } catch (e) { return "profile"; }
+})();
 let editingUserId = null; // null for add new user, userId string for editing
 function setActiveSettingsTab(tab) {
   if (["cloud", "profile", "data"].includes(tab)) {
     activeSettingsTab = tab;
+    try { localStorage.setItem("active_settings_tab", tab); } catch (e) {}
   }
 }
 function renderSettings(container) {
@@ -9292,102 +9308,6 @@ function renderSettings(container) {
         ${activeSettingsTab === "cloud" ? renderCloudTab(gasUrl, secretToken, driveFolder) :
           activeSettingsTab === "profile" ? renderProfileTab(currentUser, users) :
           renderDataTab()}
-      </div>
-
-      <!-- Modal Tambah / Edit Pengguna & Hak Akses -->
-      <div id="modal-user-manage" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-        <div class="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 border border-[#d2e2ec] shadow-2xl space-y-6 my-8 animate-in fade-in zoom-in duration-200">
-          <div class="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-[#e3f4f8] text-[#1b6274] flex items-center justify-center font-bold">
-                <span class="material-symbols-outlined text-[22px]">manage_accounts</span>
-              </div>
-              <div>
-                <h3 id="modal-user-title" class="text-base font-extrabold text-[#143242]">Tambah Pengguna Baru</h3>
-                <p class="text-xs text-[#5c7786]">Tentukan identitas dan hak akses modul untuk pengguna ini.</p>
-              </div>
-            </div>
-            <button id="btn-close-user-modal" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100 transition">
-              <span class="material-symbols-outlined text-[20px]">close</span>
-            </button>
-          </div>
-
-          <form id="form-manage-user" class="space-y-5 text-xs">
-            <input type="hidden" id="manage-user-id" value="">
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Nama Lengkap <span class="text-rose-500">*</span></label>
-                <input type="text" id="manage-user-name" required placeholder="Contoh: Andi Pratama" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
-              </div>
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Username Login <span class="text-rose-500">*</span></label>
-                <input type="text" id="manage-user-username" required placeholder="andi" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Email</label>
-                <input type="email" id="manage-user-email" placeholder="andi@creatorhub.id" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
-              </div>
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Password Login <span class="text-rose-500">*</span></label>
-                <input type="password" id="manage-user-password" placeholder="123" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
-                <p class="text-[10px] text-slate-400 mt-1">Kosongkan saat edit jika tidak ingin mengubah password.</p>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">Peran (Role)</label>
-                <select id="manage-user-role" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50] bg-white font-semibold">
-                  <option value="Admin">Admin</option>
-                  <option value="Video Editor">Video Editor</option>
-                  <option value="Member / Creator">Member / Creator</option>
-                  <option value="Owner">Owner</option>
-                </select>
-              </div>
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">URL Avatar (Opsional)</label>
-                <input type="url" id="manage-user-avatar" placeholder="https://images.unsplash.com/..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-[#1e3e50]">
-              </div>
-            </div>
-
-            <!-- Permission Checklist (RBAC) -->
-            <div class="pt-2 border-t border-slate-100">
-              <div class="flex items-center justify-between mb-3">
-                <div>
-                  <h4 class="font-extrabold text-sm text-[#143242]">Pengaturan Izin Hak Akses Modul (RBAC)</h4>
-                  <p class="text-[11px] text-[#5c7786]">Centang modul yang diizinkan untuk diakses oleh pengguna ini.</p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button type="button" id="btn-select-all-perms" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-[#1e3e50] text-[11px] font-bold transition">Pilih Semua</button>
-                  <button type="button" id="btn-clear-all-perms" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-rose-600 text-[11px] font-bold transition">Hapus Semua</button>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto p-1 border border-slate-200 rounded-xl bg-slate-50/50">
-                ${AVAILABLE_PERMISSIONS.map(p => `
-                  <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200 hover:border-[#1e3e50] transition cursor-pointer">
-                    <input type="checkbox" name="module-perm" value="${p.key}" class="w-4 h-4 rounded text-[#1e3e50] border-slate-300 focus:ring-0">
-                    <span class="material-symbols-outlined text-[16px] text-[#2c6673]">${p.icon}</span>
-                    <span class="text-[11.5px] font-medium text-slate-800 leading-tight">${p.label}</span>
-                  </label>
-                `).join('')}
-              </div>
-            </div>
-
-            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-              <button type="button" id="btn-cancel-manage-user" class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition">
-                Batal
-              </button>
-              <button type="submit" class="px-6 py-2.5 rounded-xl bg-[#1e3e50] hover:bg-[#2c6673] text-white font-bold shadow-md transition">
-                Simpan Pengguna &amp; Izin Akses
-              </button>
-            </div>
-          </form>
-        </div>
       </div>
     </div>
   `;
@@ -9874,15 +9794,15 @@ function renderDataTab() {
 function setupSettingsListeners(container) {
   // Tabs Switcher
   document.getElementById("tab-set-cloud")?.addEventListener("click", () => {
-    activeSettingsTab = "cloud";
+    setActiveSettingsTab("cloud");
     renderSettings(container);
   });
   document.getElementById("tab-set-profile")?.addEventListener("click", () => {
-    activeSettingsTab = "profile";
+    setActiveSettingsTab("profile");
     renderSettings(container);
   });
   document.getElementById("tab-set-data")?.addEventListener("click", () => {
-    activeSettingsTab = "data";
+    setActiveSettingsTab("data");
     renderSettings(container);
   });
 
@@ -9961,21 +9881,6 @@ function setupSettingsListeners(container) {
     if (modal) modal.classList.remove("hidden");
   });
 
-  // Role select change in modal -> update default permissions
-  document.getElementById("manage-user-role")?.addEventListener("change", (e) => {
-    if (!editingUserId) {
-      selectRolePermissions(e.target.value);
-    }
-  });
-
-  // Select All / Clear All Permissions Buttons in modal
-  document.getElementById("btn-select-all-perms")?.addEventListener("click", () => {
-    container.querySelectorAll("input[name='module-perm']").forEach(cb => cb.checked = true);
-  });
-  document.getElementById("btn-clear-all-perms")?.addEventListener("click", () => {
-    container.querySelectorAll("input[name='module-perm']").forEach(cb => cb.checked = false);
-  });
-
   // Edit User Permissions Button in Table
   container.querySelectorAll(".btn-edit-user-perms").forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -9991,18 +9896,25 @@ function setupSettingsListeners(container) {
       if (title) title.textContent = `Atur Hak Akses: ${user.name}`;
       if (idField) idField.value = user.user_id;
 
-      document.getElementById("manage-user-name").value = user.name || "";
-      document.getElementById("manage-user-username").value = user.username || "";
-      document.getElementById("manage-user-email").value = user.email || "";
-      document.getElementById("manage-user-password").value = "";
-      document.getElementById("manage-user-role").value = user.role || "Member / Creator";
-      document.getElementById("manage-user-avatar").value = user.avatar || "";
+      const nameEl = document.getElementById("manage-user-name");
+      const userEl = document.getElementById("manage-user-username");
+      const emailEl = document.getElementById("manage-user-email");
+      const passEl = document.getElementById("manage-user-password");
+      const roleEl = document.getElementById("manage-user-role");
+      const avEl = document.getElementById("manage-user-avatar");
+
+      if (nameEl) nameEl.value = user.name || "";
+      if (userEl) userEl.value = user.username || "";
+      if (emailEl) emailEl.value = user.email || "";
+      if (passEl) passEl.value = "";
+      if (roleEl) roleEl.value = user.role || "Member / Creator";
+      if (avEl) avEl.value = user.avatar || "";
 
       // Set permissions checkboxes
       const perms = user.permissions || (user.role === "Owner" ? ["all"] : []);
       const isAll = perms.includes("all");
 
-      container.querySelectorAll("input[name='module-perm']").forEach(cb => {
+      document.querySelectorAll("#modal-user-manage input[name='module-perm']").forEach(cb => {
         cb.checked = isAll || perms.includes(cb.value);
       });
 
@@ -10038,80 +9950,103 @@ function setupSettingsListeners(container) {
     if (modal) modal.classList.add("hidden");
     editingUserId = null;
   };
-  document.getElementById("btn-close-user-modal")?.addEventListener("click", closeModal);
-  document.getElementById("btn-cancel-manage-user")?.addEventListener("click", closeModal);
-
-  // Submit Add / Edit User Form
-  document.getElementById("form-manage-user")?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const userId = document.getElementById("manage-user-id")?.value;
-    const name = document.getElementById("manage-user-name")?.value?.trim();
-    const username = document.getElementById("manage-user-username")?.value?.trim();
-    const email = document.getElementById("manage-user-email")?.value?.trim();
-    const password = document.getElementById("manage-user-password")?.value?.trim();
-    const role = document.getElementById("manage-user-role")?.value;
-    const avatar = document.getElementById("manage-user-avatar")?.value?.trim();
-
-    // Collect selected module permissions
-    const selectedPerms = [];
-    container.querySelectorAll("input[name='module-perm']:checked").forEach(cb => {
-      selectedPerms.push(cb.value);
-    });
-
-    if (role === "Owner" || selectedPerms.length === AVAILABLE_PERMISSIONS.length) {
-      selectedPerms.unshift("all");
-    }
-
-    if (userId) {
-      // Update existing user
-      const updateData = { name, username, email, role, permissions: selectedPerms };
-      if (password) updateData.password = password;
-      if (avatar) updateData.avatar = avatar;
-
-      const res = auth.updateUser(userId, updateData);
-      if (res.success) {
-        if (window.showToast) {
-          window.showToast(`✅ Hak akses pengguna '${name}' berhasil diperbarui!`, "success");
-        }
-        closeModal();
-        renderSettings(container);
-      } else {
-        if (window.showToast) {
-          window.showToast(`❌ ${res.message}`, "error");
-        }
-      }
-    } else {
-      // Add new user
-      const newUserPayload = {
-        name,
-        username,
-        email,
-        password: password || "123",
-        role,
-        avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-        permissions: selectedPerms
-      };
-
-      const res = auth.addUser(newUserPayload);
-      if (res.success) {
-        if (window.showToast) {
-          window.showToast(`✅ Pengguna baru '${name}' (@${username}) berhasil ditambahkan!`, "success");
-        }
-        closeModal();
-        renderSettings(container);
-      } else {
-        if (window.showToast) {
-          window.showToast(`❌ ${res.message}`, "error");
-        }
-      }
-    }
-  });
 
   function selectRolePermissions(role) {
     const defaults = ROLE_DEFAULT_PERMISSIONS[role] || ["dashboard", "tasks"];
     const isAll = defaults.includes("all");
-    container.querySelectorAll("input[name='module-perm']").forEach(cb => {
+    document.querySelectorAll("#modal-user-manage input[name='module-perm']").forEach(cb => {
       cb.checked = isAll || defaults.includes(cb.value);
+    });
+  }
+
+  // Persistent User Modal Event Listeners (Attach once)
+  if (!window._userModalListenersAttached) {
+    window._userModalListenersAttached = true;
+
+    document.getElementById("btn-close-user-modal")?.addEventListener("click", closeModal);
+    document.getElementById("btn-cancel-manage-user")?.addEventListener("click", closeModal);
+
+    // Role select change in modal -> update default permissions
+    document.getElementById("manage-user-role")?.addEventListener("change", (e) => {
+      if (!editingUserId) {
+        selectRolePermissions(e.target.value);
+      }
+    });
+
+    // Select All / Clear All Permissions Buttons in modal
+    document.getElementById("btn-select-all-perms")?.addEventListener("click", () => {
+      document.querySelectorAll("#modal-user-manage input[name='module-perm']").forEach(cb => cb.checked = true);
+    });
+    document.getElementById("btn-clear-all-perms")?.addEventListener("click", () => {
+      document.querySelectorAll("#modal-user-manage input[name='module-perm']").forEach(cb => cb.checked = false);
+    });
+
+    // Submit Add / Edit User Form
+    document.getElementById("form-manage-user")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const userId = document.getElementById("manage-user-id")?.value;
+      const name = document.getElementById("manage-user-name")?.value?.trim();
+      const username = document.getElementById("manage-user-username")?.value?.trim();
+      const email = document.getElementById("manage-user-email")?.value?.trim();
+      const password = document.getElementById("manage-user-password")?.value?.trim();
+      const role = document.getElementById("manage-user-role")?.value;
+      const avatar = document.getElementById("manage-user-avatar")?.value?.trim();
+
+      // Collect selected module permissions
+      const selectedPerms = [];
+      document.querySelectorAll("#modal-user-manage input[name='module-perm']:checked").forEach(cb => {
+        selectedPerms.push(cb.value);
+      });
+
+      if (role === "Owner" || selectedPerms.length === AVAILABLE_PERMISSIONS.length) {
+        selectedPerms.unshift("all");
+      }
+
+      if (userId) {
+        // Update existing user
+        const updateData = { name, username, email, role, permissions: selectedPerms };
+        if (password) updateData.password = password;
+        if (avatar) updateData.avatar = avatar;
+
+        const res = auth.updateUser(userId, updateData);
+        if (res.success) {
+          if (window.showToast) {
+            window.showToast(`✅ Hak akses pengguna '${name}' berhasil diperbarui!`, "success");
+          }
+          closeModal();
+          const curCont = document.getElementById("main-view-container");
+          if (curCont) renderSettings(curCont);
+        } else {
+          if (window.showToast) {
+            window.showToast(`❌ ${res.message}`, "error");
+          }
+        }
+      } else {
+        // Add new user
+        const newUserPayload = {
+          name,
+          username,
+          email,
+          password: password || "123",
+          role,
+          avatar: avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+          permissions: selectedPerms
+        };
+
+        const res = auth.addUser(newUserPayload);
+        if (res.success) {
+          if (window.showToast) {
+            window.showToast(`✅ Pengguna baru '${name}' (@${username}) berhasil ditambahkan!`, "success");
+          }
+          closeModal();
+          const curCont = document.getElementById("main-view-container");
+          if (curCont) renderSettings(curCont);
+        } else {
+          if (window.showToast) {
+            window.showToast(`❌ ${res.message}`, "error");
+          }
+        }
+      }
     });
   }
 
@@ -10471,7 +10406,9 @@ class App {
           showToast(valid.reason || "⛔ Akses Ditolak: Akun Anda telah dinonaktifkan atau dihapus oleh Owner.", "error");
           return;
         }
-        this.handleRoute();
+        if (!this.shouldSkipViewReRender()) {
+          this.handleRoute();
+        }
       });
 
       // Fungsi Penyelarasan Sinkronisasi Otomatis Antar Perangkat
@@ -10487,7 +10424,9 @@ class App {
               return;
             }
             this.updateSidebarUserProfile();
-            this.handleRoute();
+            if (!this.shouldSkipViewReRender()) {
+              this.handleRoute();
+            }
           }
         });
       };
@@ -10712,6 +10651,24 @@ class App {
         this.handleRoute();
       }
     });
+  }
+
+  shouldSkipViewReRender() {
+    const userModal = document.getElementById("modal-user-manage");
+    const isUserModalOpen = Boolean(userModal && !userModal.classList.contains("hidden"));
+    const isBackdropModalOpen = Boolean(document.querySelector(".modal-backdrop:not(.hidden)"));
+    const globalModalContainer = document.getElementById("global-modal-container");
+    const isGlobalModalOpen = Boolean(globalModalContainer && globalModalContainer.children.length > 0);
+
+    const isUserTyping = Boolean(
+      document.activeElement && (
+        document.activeElement.tagName === "INPUT" ||
+        document.activeElement.tagName === "TEXTAREA" ||
+        document.activeElement.tagName === "SELECT"
+      )
+    );
+
+    return isUserModalOpen || isBackdropModalOpen || isGlobalModalOpen || isUserTyping;
   }
 
   handleRoute() {
