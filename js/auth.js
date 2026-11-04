@@ -74,6 +74,43 @@ class AuthManager {
     return this.currentUser;
   }
 
+  validateCurrentSession(storeInstance = null) {
+    if (!this.currentUser) return { valid: false, reason: "Tidak ada sesi aktif." };
+
+    const storeToUse = storeInstance || (typeof store !== "undefined" ? store : null);
+    if (!storeToUse) return { valid: true, user: this.currentUser };
+
+    const users = storeToUse.getItems(SHEET_NAMES.USERS) || [];
+    // Jika data pengguna belum termuat sama sekali, tunggu hidrasi
+    if (users.length === 0) return { valid: true, user: this.currentUser };
+
+    const currentId = String(this.currentUser.user_id || "");
+    const currentUsername = (this.currentUser.username || "").toLowerCase().trim();
+
+    const found = users.find(u => {
+      const uId = String(u.user_id || "");
+      const uName = (u.username || "").toLowerCase().trim();
+      return uId === currentId || (currentUsername && uName === currentUsername);
+    });
+
+    if (!found) {
+      console.warn(`[Auth] Pengguna ${this.currentUser.name} (${this.currentUser.user_id}) tidak ditemukan di database. Sesi dicabut.`);
+      this.logout();
+      return { valid: false, reason: "Akun Anda telah dihapus oleh Owner. Akses ke sistem ini telah dicabut." };
+    }
+
+    if (found.status && found.status !== "Active") {
+      console.warn(`[Auth] Pengguna ${this.currentUser.name} berstatus '${found.status}'. Sesi dicabut.`);
+      this.logout();
+      return { valid: false, reason: "Akun Anda telah dinonaktifkan oleh Owner." };
+    }
+
+    // Perbarui hak akses & role secara dinamis jika diubah oleh Owner
+    this.currentUser = { ...this.currentUser, ...found };
+    this.persist();
+    return { valid: true, user: this.currentUser };
+  }
+
   isOwner() {
     if (!this.currentUser) return false;
     const role = (this.currentUser.role || "").toLowerCase();

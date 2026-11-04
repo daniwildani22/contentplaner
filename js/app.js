@@ -87,24 +87,66 @@ class App {
     if (supabaseClient.isConfigured()) {
       supabaseClient.setupRealtime(store, () => {
         this.updateSyncBadge();
+        const valid = auth.validateCurrentSession(store);
+        if (!valid.valid) {
+          this.showLoginScreen();
+          showToast(valid.reason || "⛔ Akses Ditolak: Akun Anda telah dinonaktifkan atau dihapus oleh Owner.", "error");
+          return;
+        }
         this.handleRoute();
       });
 
-      // Tarik seluruh data terbaru dari database Supabase PostgreSQL secara otomatis
-      supabaseClient.fetchAll(store).then((res) => {
-        if (res.success && res.totalTables > 0) {
-          console.log(`Auto-hydrate berhasil: ${res.totalTables} tabel Supabase dimuat.`);
-          this.updateSyncBadge();
-          this.handleRoute();
+      // Fungsi Penyelarasan Sinkronisasi Otomatis Antar Perangkat
+      const syncCloudData = () => {
+        return supabaseClient.fetchAll(store).then((res) => {
+          if (res.success) {
+            console.log(`Auto-hydrate berhasil: ${res.totalTables} tabel Supabase dimuat.`);
+            this.updateSyncBadge();
+            const valid = auth.validateCurrentSession(store);
+            if (!valid.valid) {
+              this.showLoginScreen();
+              showToast(valid.reason || "⛔ Akses Ditolak: Akun Anda telah dinonaktifkan atau dihapus oleh Owner.", "error");
+              return;
+            }
+            this.updateSidebarUserProfile();
+            this.handleRoute();
+          }
+        });
+      };
+
+      // Tarik data saat aplikasi pertama kali dimuat
+      syncCloudData();
+
+      // Auto-Sync Polling setiap 10 detik: Menjamin seluruh HP & komputer otomatis sinkron tanpa perlu refresh manual
+      setInterval(() => {
+        if (document.visibilityState === "visible") {
+          syncCloudData();
         }
+      }, 10000);
+
+      // Sinkronkan otomatis saat aplikasi dibuka kembali di HP (unlock screen) atau pindah tab browser
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          syncCloudData();
+        }
+      });
+
+      window.addEventListener("focus", () => {
+        syncCloudData();
       });
     }
 
     // 5. Initial State Check
     if (auth.isLoggedIn()) {
-      this.showAppShell();
-      this.updateSidebarUserProfile();
-      this.handleRoute();
+      const valid = auth.validateCurrentSession(store);
+      if (valid.valid) {
+        this.showAppShell();
+        this.updateSidebarUserProfile();
+        this.handleRoute();
+      } else {
+        this.showLoginScreen();
+        showToast(valid.reason || "⛔ Akun Anda tidak ditemukan atau akses telah dicabut oleh Owner.", "error");
+      }
     } else {
       this.showLoginScreen();
     }
@@ -269,6 +311,14 @@ class App {
   handleRoute() {
     if (!auth.isLoggedIn()) {
       this.showLoginScreen();
+      return;
+    }
+
+    // Validasi apakah akun pengguna masih ada dan aktif di database
+    const sessionCheck = auth.validateCurrentSession(store);
+    if (!sessionCheck.valid) {
+      this.showLoginScreen();
+      showToast(sessionCheck.reason || "⛔ Akses Ditolak: Akun Anda telah dinonaktifkan atau dihapus oleh Owner.", "error");
       return;
     }
 

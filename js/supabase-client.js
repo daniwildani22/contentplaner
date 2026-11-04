@@ -196,6 +196,93 @@ class SupabaseManager {
     }
   }
 
+  normalizeForSupabase(sheetName, item) {
+    if (!item || typeof item !== "object") return item;
+    const clean = { ...item };
+
+    // 1. Ubah empty string "" pada foreign key menjadi null agar lolos validasi foreign key constraint Postgres
+    const fkFields = [
+      "brand_id", "client_id", "project_id", "campaign_id", "content_id",
+      "task_id", "user_id", "assigned_user", "editor_user", "uploaded_by", "invoice_id"
+    ];
+    fkFields.forEach(fk => {
+      if (clean[fk] === "" || clean[fk] === "undefined") {
+        clean[fk] = null;
+      }
+    });
+
+    // 2. Pemetaan & Sinkronisasi Alias Kolom (Aplikasi vs Skema Database PostgreSQL)
+    if (sheetName === SHEET_NAMES.CONTENT_TASKS) {
+      clean.task_name = clean.task_title || clean.task_name || clean.title || "Tugas Pekerjaan";
+      clean.task_title = clean.task_name;
+    } else if (sheetName === SHEET_NAMES.CONTENT_PLANNING) {
+      if (clean.hook && !clean.hook_3sec) clean.hook_3sec = clean.hook;
+      if (clean.hook_3sec && !clean.hook) clean.hook = clean.hook_3sec;
+    } else if (sheetName === SHEET_NAMES.CONTENT_CALENDAR) {
+      if (clean.publication_date && !clean.publish_date) clean.publish_date = clean.publication_date;
+      if (clean.publish_date && !clean.publication_date) clean.publication_date = clean.publish_date;
+      if (clean.production_date && !clean.shooting_date) clean.shooting_date = clean.production_date;
+      if (clean.deadline && !clean.deadline_date) clean.deadline_date = clean.deadline;
+      if (clean.schedule_status && !clean.status) clean.status = clean.schedule_status;
+      if (!clean.title && clean.content_id) clean.title = `Jadwal Konten #${clean.content_id}`;
+    } else if (sheetName === SHEET_NAMES.CONTENT_SCRIPTS) {
+      if (clean.script_title && !clean.title) clean.title = clean.script_title;
+      if (clean.title && !clean.script_title) clean.script_title = clean.title;
+      if (clean.script_body && !clean.body_script) clean.body_script = clean.script_body;
+      if (clean.caption && !clean.draft_caption) clean.draft_caption = clean.caption;
+      if (clean.hook && !clean.visual_hook) clean.visual_hook = clean.hook;
+    } else if (sheetName === SHEET_NAMES.MEDIA_LIBRARY) {
+      if (clean.file_url && !clean.storage_url) clean.storage_url = clean.file_url;
+      if (!clean.storage_url) clean.storage_url = "https://drive.google.com";
+    } else if (sheetName === SHEET_NAMES.REFERENCES) {
+      if (clean.reference_title && !clean.title) clean.title = clean.reference_title;
+      if (clean.title && !clean.reference_title) clean.reference_title = clean.title;
+      if (clean.reference_url && !clean.link_url) clean.link_url = clean.reference_url;
+      if (!clean.link_url) clean.link_url = "https://tiktok.com";
+    } else if (sheetName === SHEET_NAMES.TIME_TRACKING) {
+      if (clean.activity && !clean.activity_type) clean.activity_type = clean.activity;
+      if (clean.duration && !clean.duration_seconds) clean.duration_seconds = (Number(clean.duration) || 0) * 60;
+      if (!clean.start_time || typeof clean.start_time === "string") {
+        clean.start_time = new Date().toISOString();
+      }
+    }
+
+    return clean;
+  }
+
+  normalizeFromSupabase(sheetName, row) {
+    if (!row || typeof row !== "object") return row;
+    const item = { ...row };
+
+    // Sinkronisasi alias dari database kembali ke model data internal frontend
+    if (sheetName === SHEET_NAMES.CONTENT_TASKS) {
+      if (!item.task_title && item.task_name) item.task_title = item.task_name;
+      if (!item.title && item.task_name) item.title = item.task_name;
+    } else if (sheetName === SHEET_NAMES.CONTENT_PLANNING) {
+      if (!item.hook && item.hook_3sec) item.hook = item.hook_3sec;
+    } else if (sheetName === SHEET_NAMES.CONTENT_CALENDAR) {
+      if (!item.publication_date && item.publish_date) item.publication_date = item.publish_date;
+      if (!item.production_date && item.shooting_date) item.production_date = item.shooting_date;
+      if (!item.deadline && item.deadline_date) item.deadline = item.deadline_date;
+      if (!item.schedule_status && item.status) item.schedule_status = item.status;
+    } else if (sheetName === SHEET_NAMES.CONTENT_SCRIPTS) {
+      if (!item.script_title && item.title) item.script_title = item.title;
+      if (!item.script_body && item.body_script) item.script_body = item.body_script;
+      if (!item.caption && item.draft_caption) item.caption = item.draft_caption;
+      if (!item.hook && item.visual_hook) item.hook = item.visual_hook;
+    } else if (sheetName === SHEET_NAMES.MEDIA_LIBRARY) {
+      if (!item.file_url && item.storage_url) item.file_url = item.storage_url;
+    } else if (sheetName === SHEET_NAMES.REFERENCES) {
+      if (!item.reference_title && item.title) item.reference_title = item.title;
+      if (!item.reference_url && item.link_url) item.reference_url = item.link_url;
+    } else if (sheetName === SHEET_NAMES.TIME_TRACKING) {
+      if (!item.activity && item.activity_type) item.activity = item.activity_type;
+      if (!item.duration && item.duration_seconds) item.duration = Math.round(item.duration_seconds / 60);
+    }
+
+    return item;
+  }
+
   async fetchAll(storeInstance) {
     if (!this.isConfigured() || !storeInstance) return { success: false, message: "Supabase belum dikonfigurasi." };
 
@@ -204,9 +291,13 @@ class SupabaseManager {
       const promises = Object.entries(TABLE_MAP).map(async ([sheetName, tableName]) => {
         try {
           const { data, error } = await this.client.from(tableName).select("*");
-          if (!error && data && data.length > 0) {
-            storeInstance.replaceSheetData(sheetName, data);
+          if (!error && Array.isArray(data)) {
+            // Normalisasi data dari Supabase ke state store
+            const normalized = data.map(row => this.normalizeFromSupabase(sheetName, row));
+            storeInstance.replaceSheetData(sheetName, normalized);
             totalFetched++;
+          } else if (error) {
+            console.warn(`[Supabase fetchAll error on ${tableName}]:`, error.message);
           }
         } catch (e) {
           console.warn(`Gagal memuat tabel ${tableName}:`, e);
@@ -214,6 +305,7 @@ class SupabaseManager {
       });
 
       await Promise.all(promises);
+      storeInstance.isHydratedFromCloud = true;
       return { success: true, totalTables: totalFetched };
     } catch (err) {
       return { success: false, message: err.message };
@@ -229,13 +321,51 @@ class SupabaseManager {
 
     try {
       if (action === "create" || action === "insert") {
-        await this.client.from(tableName).upsert(item);
+        let payload = this.normalizeForSupabase(sheetName, item);
+        let res = await this.client.from(tableName).upsert(payload);
+        
+        // Resilient fallback jika terdapat kolom yang belum terdefinisi di skema Supabase
+        if (res.error && res.error.code === "PGRST204" && res.error.message) {
+          const match = res.error.message.match(/Could not find the '([^']+)' column/);
+          if (match && match[1]) {
+            console.warn(`[Supabase Schema Fallback] Kolom '${match[1]}' belum ada di tabel '${tableName}', menyimpan tanpa kolom tersebut...`);
+            delete payload[match[1]];
+            res = await this.client.from(tableName).upsert(payload);
+          }
+        }
+
+        if (res.error) {
+          console.warn(`[Supabase autoSave INSERT error on ${tableName}]:`, res.error.message, res.error.details);
+        } else {
+          console.log(`[Supabase autoSave] Sukses simpan ke ${tableName}`);
+        }
       } else if (action === "update") {
         const targetId = id || item[pk];
-        await this.client.from(tableName).update(item).eq(pk, targetId);
+        let payload = this.normalizeForSupabase(sheetName, item);
+        let res = await this.client.from(tableName).update(payload).eq(pk, targetId);
+
+        if (res.error && res.error.code === "PGRST204" && res.error.message) {
+          const match = res.error.message.match(/Could not find the '([^']+)' column/);
+          if (match && match[1]) {
+            console.warn(`[Supabase Schema Fallback] Kolom '${match[1]}' belum ada di tabel '${tableName}', memperbarui tanpa kolom tersebut...`);
+            delete payload[match[1]];
+            res = await this.client.from(tableName).update(payload).eq(pk, targetId);
+          }
+        }
+
+        if (res.error) {
+          console.warn(`[Supabase autoSave UPDATE error on ${tableName}]:`, res.error.message);
+        }
       } else if (action === "delete") {
-        const targetId = id || item[pk];
-        await this.client.from(tableName).delete().eq(pk, targetId);
+        const targetId = id || (item ? item[pk] : null);
+        if (targetId) {
+          const res = await this.client.from(tableName).delete().eq(pk, targetId);
+          if (res.error) {
+            console.warn(`[Supabase autoSave DELETE error on ${tableName}]:`, res.error.message);
+          } else {
+            console.log(`[Supabase autoSave] Sukses hapus dari ${tableName} ID: ${targetId}`);
+          }
+        }
       }
     } catch (err) {
       console.warn(`Auto-save ke Supabase (${tableName}) gagal, tersimpan lokal:`, err);
@@ -253,7 +383,33 @@ class SupabaseManager {
           const tableName = payload.table;
           const eventType = payload.eventType; // 'INSERT', 'UPDATE', 'DELETE'
 
-          // Cari sheetName yang sesuai
+          // 1. Tangani Pencabutan Akses Pengguna Secara Realtime
+          if (tableName === "users" && typeof auth !== "undefined") {
+            const currentUser = auth.getCurrentUser();
+            if (currentUser) {
+              const currentId = String(currentUser.user_id || "");
+              if (eventType === "DELETE" && payload.old && String(payload.old.user_id) === currentId) {
+                console.warn("[Realtime Auth] Akun aktif ini telah dihapus oleh Owner!");
+                auth.logout();
+                if (window.handleAppLogout) window.handleAppLogout();
+                else window.location.reload();
+                alert("⛔ Akses Ditolak: Akun Anda telah dihapus oleh Owner. Anda telah dikeluarkan dari sistem.");
+                return;
+              }
+              if (eventType === "UPDATE" && payload.new && String(payload.new.user_id) === currentId) {
+                if (payload.new.status && payload.new.status !== "Active") {
+                  console.warn("[Realtime Auth] Akun aktif ini telah dinonaktifkan oleh Owner!");
+                  auth.logout();
+                  if (window.handleAppLogout) window.handleAppLogout();
+                  else window.location.reload();
+                  alert("⛔ Akses Ditutup: Status akun Anda telah dinonaktifkan oleh Owner.");
+                  return;
+                }
+              }
+            }
+          }
+
+          // 2. Sinkronkan Perubahan Data ke Central Store
           const sheetEntry = Object.entries(TABLE_MAP).find(([, tbl]) => tbl === tableName);
           if (!sheetEntry || !storeInstance) return;
 
@@ -261,22 +417,27 @@ class SupabaseManager {
           const pk = PK_MAP[tableName] || "id";
 
           if (eventType === "INSERT") {
+            const normalized = this.normalizeFromSupabase(sheetName, payload.new);
             const list = storeInstance.getItems(sheetName);
-            if (!list.some(i => i[pk] === payload.new[pk])) {
-              storeInstance.state[sheetName].unshift(payload.new);
+            if (!list.some(i => i[pk] === normalized[pk])) {
+              storeInstance.state[sheetName].unshift(normalized);
               storeInstance.persist();
             }
           } else if (eventType === "UPDATE") {
+            const normalized = this.normalizeFromSupabase(sheetName, payload.new);
             const list = storeInstance.getItems(sheetName);
-            const idx = list.findIndex(i => i[pk] === payload.new[pk]);
+            const idx = list.findIndex(i => i[pk] === normalized[pk]);
             if (idx !== -1) {
-              storeInstance.state[sheetName][idx] = { ...list[idx], ...payload.new };
+              storeInstance.state[sheetName][idx] = { ...list[idx], ...normalized };
               storeInstance.persist();
             }
           } else if (eventType === "DELETE") {
             const list = storeInstance.getItems(sheetName);
-            storeInstance.state[sheetName] = list.filter(i => i[pk] !== payload.old[pk]);
-            storeInstance.persist();
+            const targetId = payload.old ? payload.old[pk] : null;
+            if (targetId) {
+              storeInstance.state[sheetName] = list.filter(i => String(i[pk]) !== String(targetId));
+              storeInstance.persist();
+            }
           }
 
           if (onUpdateCallback) {
